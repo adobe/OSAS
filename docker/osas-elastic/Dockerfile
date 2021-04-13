@@ -34,12 +34,15 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
-RUN apt install -y python3 python3-pip mc nano htop
+RUN apt install -y python3 python3-pip mc nano htop git
 
-COPY requirements.txt /osas/
+RUN cd / && \
+    git clone git@github.com:adobe/OSAS.git && \
+    mv OSAS osas
+
 RUN cd /osas/ && \
     pip3 install -r requirements.txt
-COPY . /osas/
+
 
 CMD /osas/scripts/run_services.sh & cd /osas && python3 osas/webserver.py
 
