@@ -2,13 +2,24 @@
 
 ## Quick start guide
 
-To build the docker, use this command in the root folder of the project:
+**Step 1:** Get/build the docker image
+
+***Option 1:*** Use precompiled image (might not reflect latest changes):
 
 ```shell
+docker pull tiberiu44/osas:latest
+docker image tag tiberiu44/osas:latest osas:latest
+```
+
+***Option 2:*** Build the image locally
+
+```shell
+git clone https://github.com/adobe/OSAS.git
+cd OSAS
 docker build . -f docker/osas-elastic/Dockerfile -t osas:latest
 ```
 
-After building the docker image you can start OSAS by typing:
+**Step 2:** After building the docker image you can start OSAS by typing:
 
 ```shell
 docker run -p 8888:8888/tcp -p 5601:5601/tcp --storage-opts dm.basesize=20G -v <ABSOLUTE PATH TO DATA FOLDER>:/app osas
