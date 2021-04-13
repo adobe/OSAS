@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
+  </head>
+
+  <body>
+  {% if not input %}
+  <h1>Available config files in tests folder:</h1>
+  {% endif %}
+
+  {% if input %}
+  <h1>Selected config:</h1>
+  {% endif %}
+
+  {% if not input %}
+  {%for i in range(0, len)%}
+
+    <p>{{files[i]}}</p>
+    {%endfor%}
+  {% endif %}
+  {% if not input %}
+     <h1>Please input a valid config file from the list above</h1>
+  {% endif %}
+    <form method="POST" action = "/osas/confirm_config">
+      <div class = "form-group">
+
+
+        <label for="fname"><b>Input Config</b></label>
+        <select name="input" id="input" value="{{input}}">
+          {% for item in files %}
+          <option value="{{ item }}">{{item}}</option>
+          {% endfor %}
+        </select>
+        <br><br>
+
+
+        {% if input %}
+
+        <label for="fname"><b>Output config file</b></label>
+          <input cols="20" type="text" name = "output" value="{{output}}"><b>.conf</b><br><br>
+          <ul>
+            <label for="fname"><b>Select Anomaly Algorithm</b></label>
+
+
+              <select name="Anomaly" id="Anomaly">
+                {% for item in anomaly_alg %}
+                <option value="{{ item }}">{{item}}</option>
+                {% endfor %}
+              </select>
+
+            <br></br>
+
+            <label for="fname"><b>Select fields / labels to keep in config</b></label>
+            <table style="width:100%">
+
+              <tr>
+                <th>Check</th>
+                <th>ID</th>
+                <th>Generator Type</th>
+                <th>Fields</th>
+              </tr>
+              <br></br>
+              {%for i in range(0, len_config)%}
+              <tr>
+                <th><input type="checkbox" name="{{config_obj[i][0]}}" value="{{config_obj[i][0]}}" checked/></input></th>
+                <th><p>{{config_obj[i][0]}} </p></th>
+                <th><p>{{config_obj[i][1]}} </p></th>
+                <th><p>{{config_obj[i][2]}} </p></th>
+              </tr>
+
+              {%endfor%}
+
+
+            </table>
+
+
+        {% endif %}
+
+          <p></p>
+
+          </ul>
+      </div>
+
+
+      <br></br>
+      <input class="btn btn-primary" type="submit" value="submit">
+    </form>
+
+  </body>
+
+</html>

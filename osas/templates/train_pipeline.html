@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
+  </head>
+
+  <body>
+
+
+  <h1>Available datasets in tests folder:</h1>
+  {%for i in range(0, len_dataset)%}
+
+  <p>{{dataset[i]}}</p>
+  {%endfor%}
+
+    <h1>Available config in tests folder:</h1>
+    {%for i in range(0, len)%}
+
+    <p>{{files[i]}}</p>
+    {%endfor%}
+
+     <h1>Please input a valid config file from the list above</h1>
+    <form method="POST" action = "/osas/train_pipeline">
+      <div class = "form-group">
+        <label for="fname"><b>Input Dataset</b></label>
+        <select name="input" id="input">
+          {% for item in dataset %}
+          <option value="{{ item }}">{{item}}</option>
+          {% endfor %}
+        </select>
+        <br><br>
+
+        <label for="fname"><b>Input Conf</b></label>
+        <select name="input_conf" id="input_conf">
+          {% for item in files %}
+          <option value="{{ item }}">{{item}}</option>
+          {% endfor %}
+        </select>
+        <br><br>
+
+        <label for="fname"><b>Output pipeline model</b></label>
+        <input type="text" name = "output" value="file_name"><b>.model</b><br><br>
+      </div>
+      <input class="btn btn-primary" type="submit" value="submit">
+    </form>
+
+  </body>
+
+</html>

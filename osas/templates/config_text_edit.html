@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
+  </head>
+
+  <body>
+    <h1>Confirm/manual edit config file</h1>
+
+    <ul>
+    <form method="POST" action = "/osas/confirm_config">
+      <label for="fname"><b>Edit Config</b></label>
+      <select name="input" id="input" value="{{input}}">
+        {% for item in input %}
+        <option value="{{ item }}">{{item}}</option>
+        {% endfor %}
+      </select>
+      <br></br>
+      <input class="btn btn-primary" type="submit" value="submit">
+      <br></br>
+      <div class = "form-group">
+          <textarea rows="30" cols="150" name="text_box" >{{input_data}}</textarea>
+        <br><br>
+
+      </div>
+
+    </form>
+    </ul>
+  </body>
+
+</html>

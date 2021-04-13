@@ -1,0 +1,10 @@
+; Other supported LG types:
+; [KB_LG]
+; generator_type = KeywordBased
+; field_name = process
+; keyword_list = ['java', 'bash', 'test']
+;
+; [KBB_LG]
+; generator_type = KnowledgeBased
+; field_name = process
+; rules_and_labels_tuple_list = [('*java*','java'), ('*/dev/tcp/*','tcp')]

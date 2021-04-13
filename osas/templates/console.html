@@ -1,0 +1,137 @@
+<html>
+<head>
+    <link rel="stylesheet" href="https://unpkg.com/xterm@3.6.0/dist/xterm.css" />
+</head>
+<body>
+<div style="width: 100%; height: calc(100% - 50px);" id="terminal"></div>
+
+<!--<script src="/osas/static/js/xterm.js"></script>-->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="https://unpkg.com/xterm@3.6.0/dist/xterm.js"></script>
+<script src="https://unpkg.com/xterm@3.6.0/dist/addons/fit/fit.js"></script>
+<script src="https://unpkg.com/xterm@3.6.0/dist/addons/webLinks/webLinks.js"></script>
+<script src="https://unpkg.com/xterm@3.6.0/dist/addons/fullscreen/fullscreen.js"></script>
+<script src="https://unpkg.com/xterm@3.6.0/dist/addons/search/search.js"></script>
+
+<script>
+    Terminal.applyAddon(fullscreen)
+    Terminal.applyAddon(fit)
+    Terminal.applyAddon(webLinks)
+    Terminal.applyAddon(search)
+    const xterm = new Terminal({
+        cursorBlink: true,
+        macOptionIsMeta: true,
+        scrollback: true,
+    });
+    xterm.open(document.getElementById('terminal'));
+    xterm.fit()
+    xterm.resize(15, 50)
+    console.log(`size: ${xterm.cols} columns, ${xterm.rows} rows`)
+
+    xterm.fit()
+
+
+    function fitToscreen() {
+        xterm.fit()
+        const requestOptions = {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                'row': xterm.rows,
+                'col': xterm.cols
+            })
+        };
+        fetch('/osas/console/size', requestOptions).then(response => response.text()).then(data => {
+        });
+        //socket.emit("resize", {"cols": term.cols, "rows": term.rows})
+    }
+
+    function debounce(func, wait_ms) {
+        let timeout
+        return function (...args) {
+            const context = this
+            clearTimeout(timeout)
+            timeout = setTimeout(() => func.apply(context, args), wait_ms)
+        }
+    }
+
+    const wait_ms = 50;
+    window.onresize = debounce(fitToscreen, wait_ms)
+
+    function runFakeTerminal(xterm) {
+        const term = xterm//.getTerminal();
+        var shellprompt = '$ ';
+        fitToscreen();
+
+        function prompt() {
+            term.write('\r\n' + shellprompt);
+        }
+
+        term.writeln('OSAS shell v1.0.1');
+        term.writeln('Use carefully.');
+        term.writeln('');
+        prompt();
+
+        term.on('key', function (key, ev) {
+            postToTerminal(key, ev.keyCode, ev.altKey, ev.ctrlKey, ev.metaKey, term);
+        });
+
+        term.on('paste', function (data, ev) {
+            // xterm.write(data);
+            for (i = 0; i < data.length; i++){
+                postToTerminal(data.charAt(i), data.charAt(i), false, false, false, xterm);
+            }
+        });
+    }
+
+    function postToTerminal(ascKey, kCode, aKey, cKey, mKey, xterm) {
+        console.log('sending ' + kCode);
+        const requestOptions = {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                asciiKey: ascKey,
+                keyCode: kCode,
+                ctrlKey: cKey,
+                altKey: aKey,
+                metaKey: mKey
+            })
+        };
+        fetch('/osas/console/write', requestOptions).then(response => response.text()).then(data => {
+            xterm.write(data);
+        });
+    }
+
+    function bin2String(array) {
+        var result = "";
+        for (var i = 0; i < array.length; i++) {
+            result += String.fromCharCode(parseInt(array[i], 2));
+        }
+        return result;
+    }
+
+    function read_console() {
+        console.log('read_console');
+        const requestOptions = {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                empty: ''
+            })
+        };
+        fetch('/osas/console/read', requestOptions).then(response => response.text()).then(data => {
+            xterm.write(data);
+        });
+        setTimeout(read_console, 50)
+    }
+
+
+    $(document).ready(function () {
+        runFakeTerminal(xterm);
+        setTimeout(read_console, 50)
+    });
+
+
+</script>
+</body>
+</html>
