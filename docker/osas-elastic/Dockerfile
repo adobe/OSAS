@@ -36,8 +36,9 @@ ENV LC_ALL en_US.UTF-8
 
 RUN apt install -y python3 python3-pip mc nano htop git
 
-RUN cd / && \
-    git clone git@github.com:adobe/OSAS.git && \
+RUN echo "Cloning OSAS" && \
+    cd / && \
+    git clone https://github.com/adobe/OSAS.git && \
     mv OSAS osas
 
 RUN cd /osas/ && \
