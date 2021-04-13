@@ -146,6 +146,7 @@ else:
     # app.config["child_pid"] = child_pid
     # set_winsize(fd, 50, 50)
     pty_fd = fd
+    os.write(pty_fd, 'export TERM=xterm\n'.encode())
     cmd = " ".join(shlex.quote(c) for c in "bash")
     print("child pid is", child_pid)
     print(
