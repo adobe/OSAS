@@ -22,7 +22,7 @@ docker build . -f docker/osas-elastic/Dockerfile -t osas:latest
 **Step 2:** After building the docker image you can start OSAS by typing:
 
 ```shell
-docker run -p 8888:8888/tcp -p 5601:5601/tcp --storage-opts dm.basesize=20G -v <ABSOLUTE PATH TO DATA FOLDER>:/app osas
+docker run -p 8888:8888/tcp -p 5601:5601/tcp -v <ABSOLUTE PATH TO DATA FOLDER>:/app osas
 ```
 
 **IMPORTANT NOTE:** Please modify the above command by adding the absolute path to your datafolder in the appropiate location
