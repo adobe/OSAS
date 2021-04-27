@@ -46,7 +46,8 @@ pty_buffer = []
 @app.route('/osas')
 def index():
     text = '''<br>OSAS server is running</br>
-            <br>For automated pipeline, go to <a href="/osas/run_pipeline">http://127.0.0.1:8888/osas/run_full_pipeline</a></br>
+            <br>For console interaction, go to <a href="/osas/console">http://127.0.0.1:8888/osas/console</a> and follow the steps</br>
+            <br>For automated pipeline, go to <a href="/osas/run_pipeline">http://127.0.0.1:8888/osas/run_full_process</a></br>
             <br>For custom pipeline, go to <a href="/osas/generate_config">http://127.0.0.1:8888/osas/generate_config</a> and follow the steps</br>
             '''
     return text
