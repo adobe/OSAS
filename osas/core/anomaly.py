@@ -25,7 +25,6 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.ensemble import IsolationForest
 import json
-from sknn import ae
 import pickle
 import base64
 
