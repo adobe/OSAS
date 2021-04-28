@@ -165,5 +165,15 @@ Params:
 * ***field_name:*** What field to use
 * ***keyword_list:*** The list of keywords to look for
 
+OSAS has four unsupervised anomaly detection algorithms:
+
+* **IFAnomaly**: n-hot encoding, singular value decomposition, isolation forest (IF)
+
+* **LOFAnomaly**: n-hot encoding, singular value decomposition, local outlier factor (LOF)
+
+* **SVDAnomaly**: n-hot encoding, singular value decomposition, inverted transform, input reconstruction error
+
+* **StatisticalNGramAnomaly**: compute label n-gram probabilities, compute anomaly score as a sum of negative log likelihood
+
 
 
