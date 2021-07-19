@@ -43,7 +43,7 @@ This guide will take you through all the necessary steps to configure, train and
 
 **Prerequisite**: Add you own CSV dataset into your data-folder (the one provided in the `docker run` command)
 
-Once you started your docker image, use the [OSAS console](http://localhost:8888/osas/console) to gain CLI access to all the tools.
+Once you have started your docker image, use the [OSAS console](http://localhost:8888/osas/console) to gain CLI access to all the tools.
 
 In what follows, we assume that your dataset is called `dataset.csv`. Please update the commands as necessary in case you use a different name/location.
 
@@ -78,7 +78,7 @@ ngram_range = (3, 5)
 generator_type = NumericField
 field_name = <FIELD_NAME>
 
-[LG_MUTLINOMIAL_COMBINER]
+[LG_MULTINOMIAL_COMBINER]
 generator_type = MultinomialFieldCombiner
 field_names = ['<FIELD_1>', '<FIELD_2>', ...]
 absolute_threshold = 10
