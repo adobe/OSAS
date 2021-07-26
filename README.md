@@ -4,7 +4,7 @@ This repository implements the models, methods and techniques presented in our p
 
 ## Introduction video (follows quick start guide)
 
-This video is a recording of our Hack In The Box Security Conference (HITB) 2021 Amsterdam presentation.
+This video is a recording of our Hack In The Box (HITB) Security Conference 2021 Amsterdam presentation.
 
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/Wi5NXGzsFC4/0.jpg)](https://www.youtube.com/watch?v=Wi5NXGzsFC4)]
 
