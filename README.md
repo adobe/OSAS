@@ -184,11 +184,11 @@ OSAS has four unsupervised anomaly detection algorithms:
 If you want to use this repository in any academic work, please cite the following work:
 
 **MLA**
-  * Boros, Tiberiu, et al. "A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing." (2021).
+  * Boros, Tiberiu, et al. ‘A Principled Approach to Enriching Security-Related Data for Running Processes through Statistics and Natural Language Processing’. IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security, 2021.
 **APA**
-  * Boros, T., Cotaie, A., Vikramjeet, K., Malik, V., Park, L., & Pachis, N. (2021). A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing. 
-**ISO 690**
-  * BOROS, Tiberiu, et al. A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing. 2021.
+  * Boros, T., Cotaie, A., Vikramjeet, K., Malik, V., Park, L., & Pachis, N. (2021). A principled approach to enriching security-related data for running processes through statistics and natural language processing. IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security. 
+**Chicago**
+  * Boros, Tiberiu, Andrei Cotaie, Kumar Vikramjeet, Vivek Malik, Lauren Park, and Nick Pachis. ‘A Principled Approach to Enriching Security-Related Data for Running Processes through Statistics and Natural Language Processing’. In IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security, 2021.
     
 **BibTeX**
 
@@ -196,6 +196,7 @@ If you want to use this repository in any academic work, please cite the followi
 @article{boros2021principled,
   title={A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing},
   author={Boros, Tiberiu and Cotaie, Andrei and Vikramjeet, Kumar and Malik, Vivek and Park, Lauren and Pachis, Nick},
-  year={2021}
+  year={2021},
+  booktitle={IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security}
 }
 ```
