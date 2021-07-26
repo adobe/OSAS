@@ -2,6 +2,10 @@
 
 This repository implements the models, methods and techniques presented in our paper: [A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing](https://www.scitepress.org/Papers/2021/103814/103814.pdf).
 
+## Introduction video (follows quick start guide)
+
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/Wi5NXGzsFC4/0.jpg)](https://www.youtube.com/watch?v=Wi5NXGzsFC4)]
+
 ## Quick start guide
 
 **Step 1:** Get/build the docker image
