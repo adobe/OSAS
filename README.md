@@ -1,5 +1,7 @@
 # One Stop Anomaly Shop (OSAS)
 
+This repository implements the models, methods and techniques presented in our paper: [A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing](https://www.scitepress.org/Papers/2021/103814/103814.pdf).
+
 ## Quick start guide
 
 **Step 1:** Get/build the docker image
@@ -175,5 +177,25 @@ OSAS has four unsupervised anomaly detection algorithms:
 
 * **StatisticalNGramAnomaly**: compute label n-gram probabilities, compute anomaly score as a sum of negative log likelihood
 
+# Citing and attribution
 
+**Full-text-paper: [A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing](https://www.scitepress.org/Papers/2021/103814/103814.pdf).**
 
+If you want to use this repository in any academic work, please cite the following work:
+
+**MLA**
+  * Boros, Tiberiu, et al. "A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing." (2021).
+**APA**
+  * Boros, T., Cotaie, A., Vikramjeet, K., Malik, V., Park, L., & Pachis, N. (2021). A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing. 
+**ISO 690**
+  * BOROS, Tiberiu, et al. A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing. 2021.
+    
+**BibTeX**
+
+```text
+@article{boros2021principled,
+  title={A Principled Approach to Enriching Security-related Data for Running Processes through Statistics and Natural Language Processing},
+  author={Boros, Tiberiu and Cotaie, Andrei and Vikramjeet, Kumar and Malik, Vivek and Park, Lauren and Pachis, Nick},
+  year={2021}
+}
+```
