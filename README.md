@@ -191,8 +191,10 @@ If you want to use this repository in any academic work, please cite the followi
 
 **MLA**
   * Boros, Tiberiu, et al. ‘A Principled Approach to Enriching Security-Related Data for Running Processes through Statistics and Natural Language Processing’. IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security, 2021.
+
 **APA**
   * Boros, T., Cotaie, A., Vikramjeet, K., Malik, V., Park, L., & Pachis, N. (2021). A principled approach to enriching security-related data for running processes through statistics and natural language processing. IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security. 
+
 **Chicago**
   * Boros, Tiberiu, Andrei Cotaie, Kumar Vikramjeet, Vivek Malik, Lauren Park, and Nick Pachis. ‘A Principled Approach to Enriching Security-Related Data for Running Processes through Statistics and Natural Language Processing’. In IoTBDS 2021 - 6th International Conference on Internet of Things, Big Data and Security, 2021.
     
