@@ -26,6 +26,58 @@ sys.path.append('')
 import json
 from osas.core.interfaces import LabelGenerator, Datasource
 from osas.core.utils import Tokenizer
+from enum import Enum
+import obfuscation_detection as od
+
+class ObfuscationFieldPlatform(Enum):
+    LINUX = od.PlatformType.LINUX
+    WINDOWS = od.PlatformType.WINDOWS
+    ALL = od.PlatformType.ALL
+
+
+class ObfuscationField(LabelGenerator):
+    """
+    This type of Label generator handles fields that contain Linux/Windows commands. It uses machine learning
+    to predict if a command is obfuscated or not.
+    """
+
+    def __init__(self, field_name: str = '', platform: ObfuscationFieldPlatform = ObfuscationFieldPlatform.ALL, gpu: bool = False):
+        if platform == ObfuscationFieldPlatform.LINUX:
+            platform = od.PlatformType.LINUX
+        elif platform == ObfuscationFieldPlatform.WINDOWS:
+            platform = od.PlatformType.WINDOWS
+        else:
+            platform = od.PlatformType.ALL
+        platform_str = str(platform)
+        self._model = {
+            'field_name': field_name,
+            'platform': platform_str,
+            'gpu': gpu
+        }
+        self._classifier = od.ObfuscationClassifier(platform = platform, gpu = gpu)
+    
+    def build_model(self, dataset: Datasource) -> dict:
+        return self._model
+    
+    @staticmethod
+    def from_pretrained(pretrained: str) -> object:
+        lg = ObfuscationField()
+        lg._model = json.loads(pretrained)
+        platform = od.PlatformType.ALL
+        if lg._model['platform'] == 'od.PlatformType.LINUX':
+            platform = od.PlatformType.LINUX
+        elif lg._model['platform'] == 'od.PlatformType.WINDOWS':
+            platform = od.PlatformType.WINDOWS
+        lg._classifier = od.ObfuscationClassifier(platform = platform, gpu = bool(lg._model['gpu']))
+    
+    def __call__(self, object: dict) -> [str]:
+        command = object[self._model['field_name']]
+        classification = self._classifier([command])[0]
+        if classification == 1:
+            ret = 'OBFUSCATED'
+        else:
+            ret = 'NOT OBFUSCATED'
+        return [ret]
 
 
 class NumericField(LabelGenerator):
