@@ -26,13 +26,68 @@ sys.path.append('')
 import json
 from osas.core.interfaces import LabelGenerator, Datasource
 from osas.core.utils import Tokenizer
+from enum import Enum
+from lol.api import LOLC
+from lol.api import PlatformType
+
+
+class LOLFieldPlatform(Enum):
+    LINUX = PlatformType.LINUX
+    WINDOWS = PlatformType.WINDOWS
+
+
+class LOLField(LabelGenerator):
+    """
+    This type of LabelGenerator handles fields that contain Linux/Windows commands. It uses MachineLearning to
+    predict if a command is part of a Living of the Land attack
+    """
+
+    def __init__(self, field_name: str = '', platform: LOLFieldPlatform = LOLFieldPlatform.LINUX, return_labels=False):
+        """
+        Constructor
+        :param field_name: what field to look for in the data object
+        :param platform: chose what model to use Windows/Linux
+        :param return_labels: return all generated labels or just the status (BAD, GOOD, NEUTRAL)
+        """
+        if platform == LOLFieldPlatform.LINUX:
+            platform = PlatformType.LINUX
+        elif platform == LOLFieldPlatform.WINDOWS:
+            platform = PlatformType.WINDOWS
+        platform_str = str(platform)
+        self._model = {
+            'field_name': field_name,
+            'platform': platform_str,
+            'return_labels': return_labels
+        }
+        self._classifier = LOLC(platform=platform)
+
+    def build_model(self, dataset: Datasource) -> dict:
+        return self._model
+
+    @staticmethod
+    def from_pretrained(pretrained: str) -> object:
+        lg = LOLField()
+        lg._model = json.loads(pretrained)
+        platform = PlatformType.LINUX
+        if lg._model['platform'] == 'PlatformType.WINDOWS':
+            platform = PlatformType.WINDOWS
+        lg._classifier = LOLC(platform=platform)
+
+    def __call__(self, object: dict):
+        command = object[self._model['field_name']]
+        status, labels = self._classifier(command)
+        ret_labels = [status]
+        if self._model['return_labels']:
+            for label in labels:
+                ret_labels.append(label)
+        return ret_labels
 
 
 class NumericField(LabelGenerator):
     """
-    This type of LabelGenerator handles numerical fields. It computes the mean and standard deviation and generates labels according to
-    the distance between the current value and the mean value (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE,
-    2*sigma<value OUTLIER)
+    This type of LabelGenerator handles numerical fields. It computes the mean and standard deviation and generates
+    labels according to the distance between the current value and the mean value
+    (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE, 2*sigma<value OUTLIER)
     """
 
     def __init__(self, field_name: str = ''):
