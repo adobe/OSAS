@@ -69,7 +69,8 @@ class ObfuscationField(LabelGenerator):
         elif lg._model['platform'] == 'od.PlatformType.WINDOWS':
             platform = od.PlatformType.WINDOWS
         lg._classifier = od.ObfuscationClassifier(platform = platform, gpu = bool(lg._model['gpu']))
-    
+        return lg
+
     def __call__(self, object: dict) -> [str]:
         command = object[self._model['field_name']]
         classification = self._classifier([command])[0]
