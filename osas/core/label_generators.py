@@ -72,6 +72,7 @@ class LOLField(LabelGenerator):
         if lg._model['platform'] == 'PlatformType.WINDOWS':
             platform = PlatformType.WINDOWS
         lg._classifier = LOLC(platform=platform)
+        return lg
 
     def __call__(self, object: dict):
         command = object[self._model['field_name']]
