@@ -24,6 +24,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import RandomForestClassifier
 import json
 import pickle
 import base64
@@ -328,6 +329,66 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         pre_model = pickle.loads(base64.b64decode(tmp['model']))
         model = StatisticalNGramAnomaly()
         model._model = pre_model
+
+        return model
+
+class SupervisedClassifierAnomaly(AnomalyDetection):
+    def __init__(self):
+        super().__init__()
+        self._model = None
+        self._encoder = None
+
+    def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str) -> dict:
+        labels = []
+        model_ground_truths = []
+        encoder = MultiLabelBinarizer()
+        for item in dataset:
+            labels.append(item['_labels'])
+            # TODO: for now, only using "clean" and "bad" as labels.
+            # need to find a new way to generalize on all types of labels
+            if item[ground_truth_column] == 'clean':
+                model_ground_truths.append(0)
+            elif item[ground_truth_column] == 'bad':
+                model_ground_truths.append(1)
+            else:
+                raise Exception('invalid ground truth value: ' + item[ground_truth_column])
+        labels_enc = encoder.fit_transform(labels)
+        self._encoder = encoder
+
+        rf = RandomForestClassifier(n_estimators=100, random_state=42) # hyperparameters
+        rf.fit(labels_enc, model_ground_truths)
+
+        self._model = rf
+        model = {
+            'encoder': self._encoder,
+            'classifier': self._model
+        }
+        out_model = base64.b64encode(pickle.dumps(model)).decode('ascii')
+        model = {'model': out_model}
+        return model
+        
+    def __call__(self, dataset: Datasource) -> [float]:
+        labels = []
+        for item in dataset:
+            labels.append(item['_labels'])
+        labels_enc = self._encoder.transform(labels)
+    
+        preds = self._model.predict_proba(labels_enc)
+        # hard-coded for "bad" index right now
+        preds = [pred[1] for pred in preds]
+        # return list of probabilities of the events being an anomaly
+        # print(self._model.classes_)
+        # print(len(preds))
+        # print(preds)
+        return preds
+       
+    @staticmethod
+    def from_pretrained(pretrained: str) -> AnomalyDetection:
+        tmp = json.loads(pretrained)
+        pre_model = pickle.loads(base64.b64decode(tmp['model']))
+        model = SupervisedClassifierAnomaly()
+        model._encoder = pre_model['encoder']
+        model._model = pre_model['classifier']
 
         return model
 

@@ -107,7 +107,13 @@ class Pipeline:
         da = DetectAnomalies()
         self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
                                                     load_config=False)
-        scoring_model = self._detect_anomalies.build_model(dataset)
+        # check for classifier scoring and if so, add label_column and classifier as param
+        if self.config['AnomalyScoring']['scoring_algorithm'] == 'SupervisedClassifierAnomaly':
+            ground_truth_column = self.config['AnomalyScoring']['ground_truth_column']
+            classifier = self.config['AnomalyScoring']['classifier']
+            scoring_model = self._detect_anomalies.build_model(dataset, ground_truth_column, classifier)
+        else:
+            scoring_model = self._detect_anomalies.build_model(dataset)
         final_model['scoring'] = scoring_model
         return final_model
 
