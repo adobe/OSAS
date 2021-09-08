@@ -20,11 +20,12 @@ import sys
 import ast
 import numpy as np
 import tqdm
+import sklearn.discriminant_analysis, sklearn.ensemble, sklearn.linear_model,\
+    sklearn.mixture, sklearn.naive_bayes, sklearn.neural_network, sklearn.tree
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.ensemble import IsolationForest
-from sklearn.ensemble import RandomForestClassifier
 import json
 import pickle
 import base64
@@ -335,32 +336,64 @@ class StatisticalNGramAnomaly(AnomalyDetection):
 class SupervisedClassifierAnomaly(AnomalyDetection):
     def __init__(self):
         super().__init__()
+        self.BINARY_GROUND_TRUTHS = {'clean', 'bad'}
+        self.BINARY_IND_TO_GROUND_TRUTH = ['clean', 'bad']
+        # support sklearn packages for classifiers
+        self.SKLEARN_PACKAGES = ['sklearn.discriminant_analysis', 'sklearn.ensemble',
+                                'sklearn.linear_model', 'sklearn.mixture',
+                                'sklearn.naive_bayes', 'sklearn.neural_network',
+                                'sklearn.tree']
+
         self._model = None
         self._encoder = None
+        self._is_binary_preds = False
+        self._ind_to_ground_truth = None
 
-    def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str) -> dict:
+    def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str, init_args: dict) -> dict:
         labels = []
-        model_ground_truths = []
+        ground_truth_values = set()
         encoder = MultiLabelBinarizer()
         for item in dataset:
             labels.append(item['_labels'])
-            # TODO: for now, only using "clean" and "bad" as labels.
-            # need to find a new way to generalize on all types of labels
-            if item[ground_truth_column] == 'clean':
-                model_ground_truths.append(0)
-            elif item[ground_truth_column] == 'bad':
-                model_ground_truths.append(1)
-            else:
-                raise Exception('invalid ground truth value: ' + item[ground_truth_column])
+            ground_truth_values.add(item[ground_truth_column])
         labels_enc = encoder.fit_transform(labels)
+        
+        if ground_truth_values == self.BINARY_GROUND_TRUTHS:
+            # all grouth truth labels either clean or bad
+            self._is_binary_preds = True
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH # set bad to index 1
+        else:
+            # ground truth labels can be anything
+            self._is_binary_preds = False
+            ind_to_ground_truth = list(ground_truth_values)
+        
+        # convert ground truth values to indices
+        ground_truth_to_ind = dict()
+        for i in range(len(ind_to_ground_truth)):
+            ground_truth_to_ind[ind_to_ground_truth[i]] = i
+        model_ground_truths = []
+        for item in dataset:
+            gt = item[ground_truth_column]
+            model_ground_truths.append(ground_truth_to_ind[gt])
+        # print(ground_truth_to_ind)
+        
+        # get the classifier
+        clf_class = None
+        for module in self.SKLEARN_PACKAGES:
+            if hasattr(sys.modules[module], classifier):
+                clf_class = getattr(sys.modules[module], classifier)
+        if clf_class == None:
+            raise Exception('invalid classifier name')
+        clf = clf_class(**init_args) # dict unpacking for init args
+        clf.fit(labels_enc, model_ground_truths)
+
         self._encoder = encoder
-
-        rf = RandomForestClassifier(n_estimators=100, random_state=42) # hyperparameters
-        rf.fit(labels_enc, model_ground_truths)
-
-        self._model = rf
+        self._ind_to_ground_truth = ind_to_ground_truth
+        self._model = clf
         model = {
             'encoder': self._encoder,
+            'ind_to_ground_truth': ind_to_ground_truth,
+            'is_binary_preds': self._is_binary_preds,
             'classifier': self._model
         }
         out_model = base64.b64encode(pickle.dumps(model)).decode('ascii')
@@ -374,8 +407,11 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         labels_enc = self._encoder.transform(labels)
     
         preds = self._model.predict_proba(labels_enc)
-        # hard-coded for "bad" index right now
-        preds = [pred[1] for pred in preds]
+        if self._is_binary_preds:
+            # return the "bad" prob
+            preds = [pred[self.BINARY_IND_TO_GROUND_TRUTH.index('bad')] for pred in preds]
+        else:
+            preds = [self._ind_to_ground_truth[np.argmax(pred)] for pred in preds]       
         # return list of probabilities of the events being an anomaly
         # print(self._model.classes_)
         # print(len(preds))
@@ -388,6 +424,8 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         pre_model = pickle.loads(base64.b64decode(tmp['model']))
         model = SupervisedClassifierAnomaly()
         model._encoder = pre_model['encoder']
+        model._ind_to_ground_truth = pre_model['ind_to_ground_truth']
+        model._is_binary_preds = pre_model['is_binary_preds']
         model._model = pre_model['classifier']
 
         return model

@@ -19,6 +19,7 @@
 import configparser
 import os
 import sys
+from ast import literal_eval
 
 sys.path.append('')
 from osas.pipeline.groom_data import GroomData
@@ -111,7 +112,16 @@ class Pipeline:
         if self.config['AnomalyScoring']['scoring_algorithm'] == 'SupervisedClassifierAnomaly':
             ground_truth_column = self.config['AnomalyScoring']['ground_truth_column']
             classifier = self.config['AnomalyScoring']['classifier']
-            scoring_model = self._detect_anomalies.build_model(dataset, ground_truth_column, classifier)
+            # grab function args for model init from rest of conf variables
+            init_args = dict(self.config['AnomalyScoring'])
+            del init_args['scoring_algorithm']
+            del init_args['ground_truth_column']
+            del init_args['classifier']
+            # convert config values to inferred types, safely
+            for k in init_args:
+                init_args[k] = literal_eval(init_args[k])
+            # build model
+            scoring_model = self._detect_anomalies.build_model(dataset, ground_truth_column, classifier, init_args)
         else:
             scoring_model = self._detect_anomalies.build_model(dataset)
         final_model['scoring'] = scoring_model
