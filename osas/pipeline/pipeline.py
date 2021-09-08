@@ -108,7 +108,7 @@ class Pipeline:
         da = DetectAnomalies()
         self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
                                                     load_config=False)
-        # check for classifier scoring and if so, add label_column and classifier as param
+        # check for classifier scoring and if so, add grouth truth column and classifier as param
         if self.config['AnomalyScoring']['scoring_algorithm'] == 'SupervisedClassifierAnomaly':
             ground_truth_column = self.config['AnomalyScoring']['ground_truth_column']
             classifier = self.config['AnomalyScoring']['classifier']
@@ -119,7 +119,11 @@ class Pipeline:
             del init_args['classifier']
             # convert config values to inferred types, safely
             for k in init_args:
-                init_args[k] = literal_eval(init_args[k])
+                try:
+                    init_args[k] = literal_eval(init_args[k])
+                except:
+                    # it will be a string otherwise
+                    pass
             # build model
             scoring_model = self._detect_anomalies.build_model(dataset, ground_truth_column, classifier, init_args)
         else:

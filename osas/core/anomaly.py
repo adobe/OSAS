@@ -20,8 +20,6 @@ import sys
 import ast
 import numpy as np
 import tqdm
-import sklearn.discriminant_analysis, sklearn.ensemble, sklearn.linear_model,\
-    sklearn.mixture, sklearn.naive_bayes, sklearn.neural_network, sklearn.tree
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import LocalOutlierFactor
@@ -29,6 +27,7 @@ from sklearn.ensemble import IsolationForest
 import json
 import pickle
 import base64
+import importlib
 
 sys.path.append('')
 from osas.core.interfaces import AnomalyDetection, Datasource
@@ -336,13 +335,10 @@ class StatisticalNGramAnomaly(AnomalyDetection):
 class SupervisedClassifierAnomaly(AnomalyDetection):
     def __init__(self):
         super().__init__()
-        self.BINARY_GROUND_TRUTHS = {'clean', 'bad'}
-        self.BINARY_IND_TO_GROUND_TRUTH = ['clean', 'bad']
-        # support sklearn packages for classifiers
-        self.SKLEARN_PACKAGES = ['sklearn.discriminant_analysis', 'sklearn.ensemble',
-                                'sklearn.linear_model', 'sklearn.mixture',
-                                'sklearn.naive_bayes', 'sklearn.neural_network',
-                                'sklearn.tree']
+        self.BINARY_GROUND_TRUTHS1 = {'clean', 'bad'}
+        self.BINARY_GROUND_TRUTHS2 = {0, 1}
+        self.BINARY_IND_TO_GROUND_TRUTH1 = ['clean', 'bad']
+        self.BINARY_IND_TO_GROUND_TRUTH2 = [0, 1]
 
         self._model = None
         self._encoder = None
@@ -358,10 +354,15 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
             ground_truth_values.add(item[ground_truth_column])
         labels_enc = encoder.fit_transform(labels)
         
-        if ground_truth_values == self.BINARY_GROUND_TRUTHS:
+        # set binary preds
+        if ground_truth_values == self.BINARY_GROUND_TRUTHS1:
             # all grouth truth labels either clean or bad
             self._is_binary_preds = True
-            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH # set bad to index 1
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH1 # set bad to index 1
+        elif ground_truth_values == self.BINARY_GROUND_TRUTHS2:
+            # all grouth truth labels either 0 or 1
+            self._is_binary_preds = True
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH2 # set 1 to index 1
         else:
             # ground truth labels can be anything
             self._is_binary_preds = False
@@ -375,18 +376,19 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         for item in dataset:
             gt = item[ground_truth_column]
             model_ground_truths.append(ground_truth_to_ind[gt])
-        # print(ground_truth_to_ind)
         
         # get the classifier
-        clf_class = None
-        for module in self.SKLEARN_PACKAGES:
-            if hasattr(sys.modules[module], classifier):
-                clf_class = getattr(sys.modules[module], classifier)
-        if clf_class == None:
-            raise Exception('invalid classifier name')
+        try:
+            clf_parts = classifier.split('.')
+            assert clf_parts[0] == 'sklearn'
+            sk_pkg = importlib.import_module('{:s}.{:s}'.format(clf_parts[0], clf_parts[1]))
+            clf_class = getattr(sys.modules[sk_pkg.__name__], clf_parts[2])
+        except:
+            raise Exception('expected classifier to be in sklearn package format: sklearn.<package>.<class> (ex. sklearn.linear_model.LogisiticRegression)')
         clf = clf_class(**init_args) # dict unpacking for init args
         clf.fit(labels_enc, model_ground_truths)
 
+        # return model
         self._encoder = encoder
         self._ind_to_ground_truth = ind_to_ground_truth
         self._model = clf
@@ -409,13 +411,10 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         preds = self._model.predict_proba(labels_enc)
         if self._is_binary_preds:
             # return the "bad" prob
-            preds = [pred[self.BINARY_IND_TO_GROUND_TRUTH.index('bad')] for pred in preds]
+            preds = [pred[1] for pred in preds]
         else:
+            # return the class with most prob
             preds = [self._ind_to_ground_truth[np.argmax(pred)] for pred in preds]       
-        # return list of probabilities of the events being an anomaly
-        # print(self._model.classes_)
-        # print(len(preds))
-        # print(preds)
         return preds
        
     @staticmethod

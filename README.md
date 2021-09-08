@@ -108,7 +108,7 @@ You can use the above templates to add as many label generators you want. Just m
 **Step 2:** Train the pipeline
 
 ```bash
-python3 osas/main/train_pipeline --conf-file=/app/dataset.conf --input-file=/app/dataset.csv --model-file=/app/dataset.json
+python3 osas/main/train_pipeline.py --conf-file=/app/dataset.conf --input-file=/app/dataset.csv --model-file=/app/dataset.json
 ```
 
 The above command will generate a pretrained pipeline using the previously created configuration file and the dataset
@@ -116,7 +116,7 @@ The above command will generate a pretrained pipeline using the previously creat
 **Step 3:** Run the pipeline on a dataset 
 
 ```bash
-python3 osas/main/run_pipeline --conf-file=/app/dataset.conf --model-file=/app/dataset.json --input-file=/app/dataset.csv --output-file=/app/dataset-out.csv
+python3 osas/main/run_pipeline.py --conf-file=/app/dataset.conf --model-file=/app/dataset.json --input-file=/app/dataset.csv --output-file=/app/dataset-out.csv
 ```
 
 The above command will run the pretrained pipeline on any compatible dataset. In the example we run the pipeline on the training data, but you can use previously unseen data. It will generate an output file with labels and anomaly scores and it will also import your data into Elasticsearch/Kibana. To view the result just use the the [web interface](http://localhost:5601/app/dashboards).
@@ -182,6 +182,27 @@ OSAS has four unsupervised anomaly detection algorithms:
 * **SVDAnomaly**: n-hot encoding, singular value decomposition, inverted transform, input reconstruction error
 
 * **StatisticalNGramAnomaly**: compute label n-gram probabilities, compute anomaly score as a sum of negative log likelihood
+
+## Supervised Classifiers
+
+OSAS now has support for supervised classifiers! You can use this if you have a dataset where the anomalies are already labeled for you. You may ask, why would we still use OSAS for an already labeled dataset instead of just running our own model? That's because you can leverage the OSAS label generators we have for your ML features!
+
+Here is an example in a conf file of using the supervised classifier:
+```
+[AnomalyScoring]
+scoring_algorithm = SupervisedClassifierAnomaly
+ground_truth_column = status
+classifier = sklearn.ensemble.RandomForestClassifier
+n_estimators = 100
+random_state = 42
+```
+* `scoring_algorithm` must have `SupervisedClassifierAnomaly`.
+* `ground_truth_column` is the column in your input .csv file that is the column of your ground truth labels for the supervised task.
+* `classifier` is the supervised classifier class you will use. For now, we are only supporting sklearn models and you must provide the full package path of the sklearn model (ex. `sklearn.ensemble.RandomForestClassifier`).
+* The rest of the attributes will be passed in to the `classifier`'s constructor when initialized. In this example, `n_estimators` and `random_state` are constructor arguments for the `RandomForestClassifier`.
+
+For the `ground_truth_column` in your .csv file, there are certain formats we accept that will affect the output of OSAS. For binary classification tasks, you may label your ground truth labels as either `clean`/`bad` or `0`/`1`, `1` being a `bad` label. If you use one of these two naming conventions, the output scores will be returned as a probability score of the input being `bad` (eg. between 0 and 1). For any other naming convention (for both binary and multi-class classification), the output scores will be returned as the predicted labeled rather than a score. For example, if your ground truth labels are `clean`, `unknown`, or `malicious`, then the scores will be returned as either `clean`, `unknown`, or `maclious` rather than the probability of one of these classes.
+
 
 # Citing and attribution
 
