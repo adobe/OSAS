@@ -254,7 +254,7 @@ def confirm_config():
 
             # print(config_obj)
             output = "tailored_" + input.replace('.conf', '')
-            Anomaly_list = ['StatisticalNGramAnomaly', 'SVDAnomaly', 'LOFAnomaly', 'IFAnomaly']
+            Anomaly_list = ['StatisticalNGramAnomaly', 'SVDAnomaly', 'LOFAnomaly', 'IFAnomaly', 'SupervisedClassifierAnomaly']
             return render_template("config_manual_update.html", files=files, len=len(files), config=config_data,
                                    input=input, config_obj=config_obj, len_config=len(config_obj),
                                    anomaly_alg=Anomaly_list, output=output)
@@ -267,6 +267,12 @@ def confirm_config():
             data.pop('input')
             Anomaly = data['Anomaly']
             data.pop('Anomaly')
+            ground_truth_column = data['ground-truth-column']
+            data.pop('ground-truth-column')
+            classifier = data['classifier']
+            data.pop('classifier')
+            model_args = data['model-args']
+            data.pop('model-args')
             labels = list(data.keys())
             print(labels)
 
@@ -277,6 +283,13 @@ def confirm_config():
                 new_config[label] = config[label]
             new_config['AnomalyScoring'] = config['AnomalyScoring']
             new_config['AnomalyScoring']['scoring_algorithm'] = Anomaly
+            if Anomaly == 'SupervisedClassifierAnomaly':
+                new_config['AnomalyScoring']['ground_truth_column'] = ground_truth_column
+                new_config['AnomalyScoring']['classifier'] = classifier
+                model_args = model_args.split('\n')
+                for model_arg in model_args:
+                    model_arg = model_arg.split('=')
+                    new_config['AnomalyScoring'][model_arg[0].strip()] = model_arg[1].strip()
             with open(data_path + output, 'w') as configfile:
                 new_config.write(configfile)
             input_data = open('osas/templates/config_static.txt', 'r').read() + "\n\n" + open(data_path + output,
@@ -334,7 +347,7 @@ def train_pipeline():
                 if poll is not None:
                     yield 'DONE!<br/>\n'
                     # yield 'go to <a href="/osas/run_pipeline">http://127.0.0.1:8888/osas/run_pipeline</a>'
-                    full_text = """go to <a href="/osas/confirm_config">http://127.0.0.1:8888/osas/run_pipeline</a>
+                    full_text = """go to <a href="/osas/run_pipeline">http://127.0.0.1:8888/osas/run_pipeline</a>
                         <script>
                     setTimeout(function(){
                         window.location.href = '/osas/run_pipeline';
