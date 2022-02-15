@@ -27,6 +27,7 @@ from sklearn.ensemble import IsolationForest
 import json
 import pickle
 import base64
+import importlib
 
 sys.path.append('')
 from osas.core.interfaces import AnomalyDetection, Datasource
@@ -344,6 +345,103 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         pre_model = pickle.loads(base64.b64decode(tmp['model']))
         model = StatisticalNGramAnomaly()
         model._model = pre_model
+
+        return model
+
+class SupervisedClassifierAnomaly(AnomalyDetection):
+    def __init__(self):
+        super().__init__()
+        self.BINARY_GROUND_TRUTHS1 = {'clean', 'bad'}
+        self.BINARY_GROUND_TRUTHS2 = {0, 1}
+        self.BINARY_IND_TO_GROUND_TRUTH1 = ['clean', 'bad']
+        self.BINARY_IND_TO_GROUND_TRUTH2 = [0, 1]
+
+        self._model = None
+        self._encoder = None
+        self._is_binary_preds = False
+        self._ind_to_ground_truth = None
+
+    def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str, init_args: dict) -> dict:
+        labels = []
+        ground_truth_values = set()
+        encoder = MultiLabelBinarizer()
+        for item in dataset:
+            labels.append(item['_labels'])
+            ground_truth_values.add(item[ground_truth_column])
+        labels_enc = encoder.fit_transform(labels)
+        
+        # set binary preds
+        if ground_truth_values == self.BINARY_GROUND_TRUTHS1:
+            # all grouth truth labels either clean or bad
+            self._is_binary_preds = True
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH1 # set bad to index 1
+        elif ground_truth_values == self.BINARY_GROUND_TRUTHS2:
+            # all grouth truth labels either 0 or 1
+            self._is_binary_preds = True
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH2 # set 1 to index 1
+        else:
+            # ground truth labels can be anything
+            self._is_binary_preds = False
+            ind_to_ground_truth = list(ground_truth_values)
+        
+        # convert ground truth values to indices
+        ground_truth_to_ind = dict()
+        for i in range(len(ind_to_ground_truth)):
+            ground_truth_to_ind[ind_to_ground_truth[i]] = i
+        model_ground_truths = []
+        for item in dataset:
+            gt = item[ground_truth_column]
+            model_ground_truths.append(ground_truth_to_ind[gt])
+        
+        # get the classifier
+        try:
+            clf_parts = classifier.split('.')
+            assert clf_parts[0] == 'sklearn'
+            sk_pkg = importlib.import_module('{:s}.{:s}'.format(clf_parts[0], clf_parts[1]))
+            clf_class = getattr(sys.modules[sk_pkg.__name__], clf_parts[2])
+        except:
+            raise Exception('expected classifier to be in sklearn package format: sklearn.<package>.<class> (ex. sklearn.linear_model.LogisiticRegression)')
+        clf = clf_class(**init_args) # dict unpacking for init args
+        clf.fit(labels_enc, model_ground_truths)
+
+        # return model
+        self._encoder = encoder
+        self._ind_to_ground_truth = ind_to_ground_truth
+        self._model = clf
+        model = {
+            'encoder': self._encoder,
+            'ind_to_ground_truth': ind_to_ground_truth,
+            'is_binary_preds': self._is_binary_preds,
+            'classifier': self._model
+        }
+        out_model = base64.b64encode(pickle.dumps(model)).decode('ascii')
+        model = {'model': out_model}
+        return model
+        
+    def __call__(self, dataset: Datasource) -> [float]:
+        labels = []
+        for item in dataset:
+            labels.append(item['_labels'])
+        labels_enc = self._encoder.transform(labels)
+    
+        preds = self._model.predict_proba(labels_enc)
+        if self._is_binary_preds:
+            # return the "bad" prob
+            preds = [pred[1] for pred in preds]
+        else:
+            # return the class with most prob
+            preds = [self._ind_to_ground_truth[np.argmax(pred)] for pred in preds]       
+        return preds
+       
+    @staticmethod
+    def from_pretrained(pretrained: str) -> AnomalyDetection:
+        tmp = json.loads(pretrained)
+        pre_model = pickle.loads(base64.b64decode(tmp['model']))
+        model = SupervisedClassifierAnomaly()
+        model._encoder = pre_model['encoder']
+        model._ind_to_ground_truth = pre_model['ind_to_ground_truth']
+        model._is_binary_preds = pre_model['is_binary_preds']
+        model._model = pre_model['classifier']
 
         return model
 

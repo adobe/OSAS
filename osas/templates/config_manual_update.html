@@ -2,6 +2,16 @@
 <html>
   <head>
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
+  <script>
+    function onAnomalyChange(selectObject) {
+      supervisedOptions = document.getElementById("supervised-options");
+      if (selectObject.value === "SupervisedClassifierAnomaly") {
+        supervisedOptions.style.display = "block";
+      } else {
+        supervisedOptions.style.display = "none";
+      }
+    }
+  </script>
   </head>
 
   <body>
@@ -43,11 +53,23 @@
             <label for="fname"><b>Select Anomaly Algorithm</b></label>
 
 
-              <select name="Anomaly" id="Anomaly">
+              <select name="Anomaly" id="Anomaly" onchange="onAnomalyChange(this)">
                 {% for item in anomaly_alg %}
                 <option value="{{ item }}">{{item}}</option>
                 {% endfor %}
               </select>
+
+              <div id="supervised-options" style="display:none;">
+                <label>Ground truth column:</label>
+                <input type="text" id="ground-truth-column" name="ground-truth-column" value="status" />
+                <br />
+                <label>Classifier:</label>
+                <input type="text" id="classifier" name="classifier" size="70" value="sklearn.linear_model.LogisticRegression" />
+                <br />
+                <label>Model init arguments:</label>
+                <br />
+                <textarea id="model-args" name="model-args" rows="4" cols="70">random_state = 42</textarea>
+              </div>
 
             <br></br>
 

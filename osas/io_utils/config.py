@@ -88,6 +88,12 @@ class CSVDataColumn(Config):
 
 # Label Generator dataclasses
 @dataclass
+class ObfuscationField(Config):
+    field_name: str = field(default='command')
+    gpu: bool = field(default=False)
+
+
+@dataclass
 class NumericField(Config):
     field_name: str = field(default='count')
 
