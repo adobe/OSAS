@@ -111,6 +111,11 @@ class MultinomialField(Config):
     absolute_threshold: int = field(default=10)
     relative_threshold: float = field(default=0.1)
 
+@dataclass
+class LOLField(Config):
+    field_name: str = field(default='command')
+    platform: str = field(default='linux')
+
 
 @dataclass
 class NumericalFieldCombiner(Config):

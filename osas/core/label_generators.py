@@ -27,6 +27,10 @@ import json
 from osas.core.interfaces import LabelGenerator, Datasource
 from osas.core.utils import Tokenizer
 from enum import Enum
+
+from lol.api import LOLC
+from lol.api import PlatformType
+
 import obfuscation_detection as od
 
 class ObfuscationFieldPlatform(Enum):
@@ -80,12 +84,64 @@ class ObfuscationField(LabelGenerator):
             ret = 'NOT OBFUSCATED'
         return [ret]
 
+class LOLFieldPlatform(Enum):
+    LINUX = PlatformType.LINUX
+    WINDOWS = PlatformType.WINDOWS
+
+
+class LOLField(LabelGenerator):
+    """
+    This type of LabelGenerator handles fields that contain Linux/Windows commands. It uses MachineLearning to
+    predict if a command is part of a Living of the Land attack
+    """
+
+    def __init__(self, field_name: str = '', platform: LOLFieldPlatform = LOLFieldPlatform.LINUX, return_labels=False):
+        """
+        Constructor
+        :param field_name: what field to look for in the data object
+        :param platform: chose what model to use Windows/Linux
+        :param return_labels: return all generated labels or just the status (BAD, GOOD, NEUTRAL)
+        """
+        if platform == 'linux':
+            platform = PlatformType.LINUX
+        elif platform == 'windows':
+            platform = PlatformType.WINDOWS
+        platform_str = str(platform)
+        self._model = {
+            'field_name': field_name,
+            'platform': platform_str,
+            'return_labels': return_labels
+        }
+        self._classifier = LOLC(platform=platform)
+
+    def build_model(self, dataset: Datasource) -> dict:
+        return self._model
+
+    @staticmethod
+    def from_pretrained(pretrained: str) -> object:
+        lg = LOLField()
+        lg._model = json.loads(pretrained)
+        platform = PlatformType.LINUX
+        if lg._model['platform'] == 'PlatformType.WINDOWS':
+            platform = PlatformType.WINDOWS
+        lg._classifier = LOLC(platform=platform)
+        return lg
+
+    def __call__(self, object: dict):
+        command = object[self._model['field_name']]
+        status, labels = self._classifier(command)
+        ret_labels = [status]
+        if self._model['return_labels']:
+            for label in labels:
+                ret_labels.append(label)
+        return ret_labels
+
 
 class NumericField(LabelGenerator):
     """
-    This type of LabelGenerator handles numerical fields. It computes the mean and standard deviation and generates labels according to
-    the distance between the current value and the mean value (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE,
-    2*sigma<value OUTLIER)
+    This type of LabelGenerator handles numerical fields. It computes the mean and standard deviation and generates
+    labels according to the distance between the current value and the mean value
+    (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE, 2*sigma<value OUTLIER)
     """
 
     def __init__(self, field_name: str = ''):
@@ -158,8 +214,22 @@ class TextField(LabelGenerator):
         self._total_inf = 0
         self._mean_perplex = 0
         self._std_perplex = 0
+        self._accepted_unigrams = {}
 
     def build_model(self, dataset: Datasource) -> dict:
+        unigram2count = {}
+        for item in dataset:
+            text = item[self._field_name]
+            unigrams = self._get_ngrams(text, unigrams_only=True)
+            for unigram in unigrams:
+                if unigram not in unigram2count:
+                    unigram2count[unigram] = 1
+                else:
+                    unigram2count[unigram] += 1
+        for unigram in unigram2count:
+            if unigram2count[unigram] > 2:
+                self._accepted_unigrams[unigram] = 1
+
         for item in dataset:
             text = item[self._field_name]
             ngrams = self._get_ngrams(text)
@@ -170,6 +240,8 @@ class TextField(LabelGenerator):
                     self._model[ngram] += 1
                 else:
                     self._model[ngram] = 1
+        for ngram in self._model:
+            self._model[ngram] = math.log(self._model[ngram]) + 1
         ser_model = [self._field_name, self._lm_mode, self._ngram_range[0], self._ngram_range[1], self._mean_perplex,
                      self._std_perplex, self._total_inf]
 
@@ -182,9 +254,11 @@ class TextField(LabelGenerator):
         self._std_perplex = np.std(all_perplex)
         ser_model[4] = self._mean_perplex
         ser_model[5] = self._std_perplex
+        ser_model.append(self._accepted_unigrams)
         for item in self._model:
             ser_model.append(item)
             ser_model.append(self._model[item])
+
         return ser_model
 
     def _compute_perplexity(self, text):
@@ -194,23 +268,24 @@ class TextField(LabelGenerator):
         for ngram in ngrams:
             if ngram in self._model:
                 sup_count = self._model[ngram]
-                if ngram[:-1] in self._model:
-                    inf_count = self._model[ngram[:-1]]
-                else:
-                    inf_count = self._total_inf
-                total += math.log(sup_count / inf_count)
+                total += 1 / sup_count
+                # if ngram[:-1] in self._model:
+                #     inf_count = self._model[ngram[:-1]]
+                # else:
+                #     inf_count = self._total_inf
+                # total += math.log(sup_count / inf_count)
             else:
-                total += math.log(1e-8)  # small prob for unseen events
-        return -total / len(ngrams)
+                total += -math.log(1e-8)  # small prob for unseen events
+        return total / len(ngrams)
 
     def __call__(self, input_object: dict) -> [str]:
         perplexity = self._compute_perplexity(input_object[self._field_name])
         if perplexity - self._mean_perplex < 2 * self._std_perplex:
-            return []
+            return [perplexity * 10]
         elif perplexity - self._mean_perplex < 4 * self._std_perplex:
-            return ['{0}_HIGH_PERPLEXITY'.format(self._field_name.upper())]
+            return ['{0}_HIGH_PERPLEXITY'.format(self._field_name.upper()), perplexity * 10]
         else:
-            return ['{0}_EXTREEME_PERPLEXITY'.format(self._field_name.upper())]
+            return ['{0}_EXTREEME_PERPLEXITY'.format(self._field_name.upper()), perplexity * 10]
 
     @staticmethod
     def from_pretrained(pretrained: str) -> LabelGenerator:
@@ -222,16 +297,27 @@ class TextField(LabelGenerator):
         new_instance._mean_perplex = json_obj[4]
         new_instance._std_perplex = json_obj[5]
         new_instance._total_inf = json_obj[6]
-        for ii in range((len(json_obj) - 7) // 2):
-            ngram = tuple(json_obj[ii * 2 + 7])
-            count = json_obj[ii * 2 + 7 + 1]
+        new_instance._accepted_unigrams = json_obj[7]
+        for ii in range((len(json_obj) - 8) // 2):
+            ngram = tuple(json_obj[ii * 2 + 8])
+            count = json_obj[ii * 2 + 8 + 1]
             new_instance._model[ngram] = count
         return new_instance
 
-    def _get_ngrams(self, text):
+    def _get_ngrams(self, text, unigrams_only=False):
         text = str(text)
         use_chars = self._lm_mode == 'char'
         toks = Tokenizer.tokenize(text, use_chars=use_chars)
+        if unigrams_only:
+            return toks
+        new_toks = []
+        for tok in toks:
+            if tok in self._accepted_unigrams:
+                new_toks.append(tok)
+            else:
+                new_toks.append('<UNK>')
+        toks = new_toks
+
         # prepend and append
         c_append = self._ngram_range[0] - 1
         start = ['<s>' for _ in range(c_append)]
@@ -259,7 +345,9 @@ class MultinomialField(LabelGenerator):
         return self._mfc.build_model(dataset)
 
     def __call__(self, item: dict) -> [str]:
-        return self._mfc(item)
+        lbls = self._mfc(item)
+        lbls = [l.replace('_PAIR', '') for l in lbls]
+        return lbls
 
     @staticmethod
     def from_pretrained(pretrained: str) -> LabelGenerator:

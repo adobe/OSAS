@@ -226,7 +226,13 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         }
         # for clarity, this code is written explicitly
         for item in tqdm.tqdm(dataset, ncols=100, desc="\tbuilding model"):
-            tags = list(sorted(item['_labels']))
+            tags = item['_labels']
+            string_tags = []
+            for tag in tags:
+                if isinstance(tag, str):
+                    string_tags.append(tag)
+            tags = string_tags
+            tags = list(sorted(tags))
             # unigrams
             grams = model['1']
             for ii in range(len(tags)):
@@ -280,7 +286,16 @@ class StatisticalNGramAnomaly(AnomalyDetection):
 
         def _build_feats(tags):
             feats = []
+            string_tags = []
+            perp_score = 0
+            for tag in tags:
+                if isinstance(tag, str):
+                    string_tags.append(tag)
+                else:
+                    perp_score += tag
+            tags = string_tags
             tags = list(sorted(tags))
+
             for ii in range(len(tags)):
                 feats.append([tags[ii]])
             for ii in range(len(tags) - 1):
@@ -295,10 +310,10 @@ class StatisticalNGramAnomaly(AnomalyDetection):
             for feat in feats:
                 mid = "(" + ",".join(feat) + ")"
                 new_feats.append(mid)
-            return new_feats
+            return new_feats, perp_score
 
         def _compute_score(ngram2score, tags, handle_unseen=True):
-            feats = _build_feats(tags)
+            feats, perp_score = _build_feats(tags)
 
             score = 0
             for feat in feats:
@@ -314,8 +329,9 @@ class StatisticalNGramAnomaly(AnomalyDetection):
                     found = True
                 if not found:
                     if handle_unseen:
-                        score += 100  # -math.log(1e-8)
-            return score
+                        import math
+                        score += -math.log(1e-8)
+            return score + perp_score
 
         scores = []
         for item in tqdm.tqdm(dataset, ncols=100, desc="\tscoring data"):
