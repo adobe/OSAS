@@ -34,7 +34,7 @@ DATA_PATH=/data/kibana /opendistroforelasticsearch-kibana/bin/kibana -c /opendis
 cd /osas/
 export TERM=xterm
 #python3 osas/webserver.py
-jupyter lab --ip=0.0.0.0 --allow-root
+
 
 
 
