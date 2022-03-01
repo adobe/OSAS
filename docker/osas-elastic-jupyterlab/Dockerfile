@@ -52,6 +52,7 @@ RUN cd /osas/ && \
     pip3 install --no-cache-dir -r requirements.txt && \
     pip3 install jupyterlab
 
+ENV SHELL=/bin/bash
 
 CMD /osas/scripts/run_services.sh & jupyter lab --ip=0.0.0.0 --allow-root --ServerApp.token=osas # & cd /osas && python3 osas/webserver.py
 
