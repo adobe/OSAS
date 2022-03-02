@@ -37,7 +37,7 @@ docker run -p 8888:8888/tcp -p 5601:5601/tcp -v <ABSOLUTE PATH TO DATA FOLDER>:/
 
 After OSAS has started (it might take 1-2 minutes) you can use your browser to access some standard endpoints:
 * [http://localhost:5601/app/home#/](http://localhost:5601/app/home#/) - access to Kibana frontend (this is where you will see your data)
-* [http://localhost:8888/osas/console](http://localhost:8888/osas/console) - command-line access to osas scripts and utilities
+* [http://localhost:8888/?token=osas](http://localhost:8888/?token=osas) - access to Jupyter Lab (open Terminal or create a Notebook)
 
 For Debug (in case you need to):
 
