@@ -40,13 +40,20 @@ def _get_type(val):
                 return 'str'
 
 
-def _detect_field_type(datasource):
+def _detect_field_type(datasource, count_column=None):
     item = datasource[0]
     field_type = {key: 'int' for key in item}
     sys.stdout.write('\n')
     sys.stdout.flush()
 
+    if count_column is None:
+        count = len(datasource)
+    else:
+        count = 0
+
     for item in datasource:
+        if count_column is not None:
+            count += item[count_column]
         for key in item:
             t = _get_type(item[key])
             if t == 'float':
@@ -55,7 +62,6 @@ def _detect_field_type(datasource):
             elif t == 'str':
                 field_type[key] = t
 
-    count = len(datasource)
     field2val = {}
     for item in datasource:
         for key in field_type:
@@ -167,7 +173,11 @@ def _write_conf(generators, filename):
 def process(params):
     datasource = CSVDataSource(params.input_file)
     sys.stdout.write('Preprocessing')
-    field_type = _detect_field_type(datasource)
+    if params.count_column:
+        cc = params.count_column
+    else:
+        cc = None
+    field_type = _detect_field_type(datasource, count_column=cc)
     sys.stdout.write('\t::Detected field types:\n')
     for key in field_type:
         sys.stdout.write('\t\t"{0}": {1}\n'.format(key, field_type[key]))
@@ -184,6 +194,9 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--input-file', action='store', dest='input_file', help='location of the input file')
     parser.add_option('--output-file', action='store', dest='output_file', help='location of the output file')
+    parser.add_option('--count-column', action='store', dest='count_column',
+                      help='if this value is set, OSAS will consider the data clustered and this column will indicate'
+                           'the number of occurrences of the event. Otherwise, this number is considered equal to 1')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.output_file:
