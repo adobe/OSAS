@@ -33,6 +33,7 @@ from lol.api import PlatformType
 
 import obfuscation_detection as od
 
+
 class ObfuscationFieldPlatform(Enum):
     LINUX = od.PlatformType.LINUX
     WINDOWS = od.PlatformType.WINDOWS
@@ -45,7 +46,8 @@ class ObfuscationField(LabelGenerator):
     to predict if a command is obfuscated or not.
     """
 
-    def __init__(self, field_name: str = '', platform: ObfuscationFieldPlatform = ObfuscationFieldPlatform.ALL, gpu: bool = False):
+    def __init__(self, field_name: str = '', platform: ObfuscationFieldPlatform = ObfuscationFieldPlatform.ALL,
+                 gpu: bool = False):
         if platform == ObfuscationFieldPlatform.LINUX:
             platform = od.PlatformType.LINUX
         elif platform == ObfuscationFieldPlatform.WINDOWS:
@@ -58,11 +60,11 @@ class ObfuscationField(LabelGenerator):
             'platform': platform_str,
             'gpu': gpu
         }
-        self._classifier = od.ObfuscationClassifier(platform = platform, gpu = gpu)
-    
-    def build_model(self, dataset: Datasource) -> dict:
+        self._classifier = od.ObfuscationClassifier(platform=platform, gpu=gpu)
+
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return self._model
-    
+
     @staticmethod
     def from_pretrained(pretrained: str) -> object:
         lg = ObfuscationField()
@@ -72,7 +74,7 @@ class ObfuscationField(LabelGenerator):
             platform = od.PlatformType.LINUX
         elif lg._model['platform'] == 'od.PlatformType.WINDOWS':
             platform = od.PlatformType.WINDOWS
-        lg._classifier = od.ObfuscationClassifier(platform = platform, gpu = bool(lg._model['gpu']))
+        lg._classifier = od.ObfuscationClassifier(platform=platform, gpu=bool(lg._model['gpu']))
         return lg
 
     def __call__(self, object: dict) -> [str]:
@@ -83,6 +85,7 @@ class ObfuscationField(LabelGenerator):
         else:
             ret = 'NOT OBFUSCATED'
         return [ret]
+
 
 class LOLFieldPlatform(Enum):
     LINUX = PlatformType.LINUX
@@ -114,7 +117,7 @@ class LOLField(LabelGenerator):
         }
         self._classifier = LOLC(platform=platform)
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return self._model
 
     @staticmethod
@@ -156,11 +159,14 @@ class NumericField(LabelGenerator):
             'field_name': field_name
         }
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         from osas.data.datasources import CSVDataColumn
-
-        self._model['mean'] = CSVDataColumn(dataset[self._model['field_name']]).mean()
-        self._model["std_dev"] = CSVDataColumn(dataset[self._model['field_name']]).std()
+        if count_column is None:
+            self._model['mean'] = CSVDataColumn(dataset[self._model['field_name']]).mean()
+            self._model["std_dev"] = CSVDataColumn(dataset[self._model['field_name']]).std()
+        else:
+            self._model['mean'] = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).mean()
+            self._model["std_dev"] = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).std()
 
         return self._model
 
@@ -216,16 +222,19 @@ class TextField(LabelGenerator):
         self._std_perplex = 0
         self._accepted_unigrams = {}
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         unigram2count = {}
         for item in dataset:
             text = item[self._field_name]
             unigrams = self._get_ngrams(text, unigrams_only=True)
+            occ_number = 1
+            if count_column is not None:
+                occ_number = item[count_column]
             for unigram in unigrams:
                 if unigram not in unigram2count:
-                    unigram2count[unigram] = 1
+                    unigram2count[unigram] = occ_number
                 else:
-                    unigram2count[unigram] += 1
+                    unigram2count[unigram] += occ_number
         for unigram in unigram2count:
             if unigram2count[unigram] > 2:
                 self._accepted_unigrams[unigram] = 1
@@ -233,13 +242,16 @@ class TextField(LabelGenerator):
         for item in dataset:
             text = item[self._field_name]
             ngrams = self._get_ngrams(text)
+            occ_number = 1
+            if count_column is not None:
+                occ_number = item[count_column]
             for ngram in ngrams:
                 if len(ngram) == self._ngram_range[0]:
-                    self._total_inf += 1
+                    self._total_inf += occ_number
                 if ngram in self._model:
-                    self._model[ngram] += 1
+                    self._model[ngram] += occ_number
                 else:
-                    self._model[ngram] = 1
+                    self._model[ngram] = occ_number
         for ngram in self._model:
             self._model[ngram] = math.log(self._model[ngram]) + 1
         ser_model = [self._field_name, self._lm_mode, self._ngram_range[0], self._ngram_range[1], self._mean_perplex,
@@ -341,8 +353,8 @@ class MultinomialField(LabelGenerator):
         """
         self._mfc = MultinomialFieldCombiner([field_name], absolute_threshold, relative_threshold)
 
-    def build_model(self, dataset: Datasource) -> dict:
-        return self._mfc.build_model(dataset)
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
+        return self._mfc.build_model(dataset, count_column)
 
     def __call__(self, item: dict) -> [str]:
         lbls = self._mfc(item)
@@ -374,17 +386,20 @@ class MultinomialFieldCombiner(LabelGenerator):
                        'field_names': field_names
                        }
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pair2count = {}
         total = 0
         for item in dataset:
             combined = [str(item[field]) for field in self._model['field_names']]
             combined = '(' + ','.join(combined) + ')'
-            total += 1
+            occ_number = 1
+            if count_column is not None:
+                occ_number = item[count_column]
+            total += occ_number
             if combined not in pair2count:
-                pair2count[combined] = 1
+                pair2count[combined] = occ_number
             else:
-                pair2count[combined] += 1
+                pair2count[combined] += occ_number
         pair2prob = {}
         for key in pair2count:
             pair2prob[key] = pair2count[key] / total
@@ -429,7 +444,7 @@ class NumericalFieldCombiner(LabelGenerator):
         self._field_names = field_names
         self._normalize = normalize
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pass
 
     def __call__(self, input_object: dict) -> [str]:
@@ -458,7 +473,7 @@ class KeywordBased(LabelGenerator):
                 label_list.append("{0}_KEYWORD_{1}".format(self._field_name.upper(), self._label_list[ii].upper()))
         return label_list
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return {'field_name': self._field_name,
                 'keyword_list': self._label_list}
 
@@ -489,7 +504,7 @@ class KnowledgeBased(LabelGenerator):
                 label_list.append(self._label_list[ii])
         return label_list
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return {
             'field_name': self._field_name,
             'label_list': self._label_list,

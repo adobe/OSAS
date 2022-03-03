@@ -160,10 +160,11 @@ class LabelGenerator:
         pass
 
     @abstractmethod
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         """
         This model should generate a model on the input
         :param dataset: the dataset used to generate the model
+        :param count_column: use this column for clustered data. If not set, event count will be 1
         :return: This should be a json serializable object
         """
         pass

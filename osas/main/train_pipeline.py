@@ -48,6 +48,7 @@ if __name__ == '__main__':
     parser.add_option('--conf-file', action='store', dest='conf_file', help='location of pipeline configuration file')
     parser.add_option('--model-file', action='store', dest='model_file',
                       help='location where to store the pretrained pipeline file')
+
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:

@@ -47,6 +47,7 @@ class Pipeline:
         Pipeline.root_dir = os.path.realpath(os.path.join(curr_dir, "../"))
         self._pipeline = []
         self._detect_anomalies = None
+        self._count_column = None
 
     def load_config(self, config_file, env='DEV'):
         '''
@@ -62,6 +63,9 @@ class Pipeline:
             self.config = cfg
 
         self._scoring_model_name = self.config['AnomalyScoring']['scoring_algorithm']
+        if 'GENERAL' in self.config:
+            if 'count_column' in self.config['GENERAL']['count_column']:
+                self._count_column = self.config['GENERAL']['count_column']
 
     def load_model(self, model_file, env='DEV'):
         '''
@@ -100,7 +104,7 @@ class Pipeline:
                 print("\t\t::OBJECT: {0}".format(lg))
                 sys.stdout.write('\t\t::BUILDING MODEL...')
                 sys.stdout.flush()
-                lg_model = gd.build_model(lg, dataset)
+                lg_model = gd.build_model(lg, dataset, self._count_column)
                 final_model['model'][sect] = lg_model
                 sys.stdout.write('done\n')
                 self._pipeline.append(lg)

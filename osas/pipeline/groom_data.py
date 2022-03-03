@@ -88,8 +88,8 @@ class GroomData():
         # return lg
 
     def build_model(self, model: LabelGenerator,
-                    dataset: Datasource) -> dict:
-        return model.build_model(dataset)
+                    dataset: Datasource, count_column: str) -> dict:
+        return model.build_model(dataset, count_column)
 
     def get_labels(self, model: LabelGenerator,
                    input_object: dict) -> [str]:
