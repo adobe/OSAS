@@ -48,6 +48,9 @@ if __name__ == '__main__':
     parser.add_option('--conf-file', action='store', dest='conf_file', help='location of pipeline configuration file')
     parser.add_option('--model-file', action='store', dest='model_file',
                       help='location where to store the pretrained pipeline file')
+    parser.add_option('--incremental', action='store_true', help='perform incremental update on the model (will load '
+                                                                 'and update file at location specified by '
+                                                                 '--model-file)')
 
     (params, _) = parser.parse_args(sys.argv)
 
