@@ -189,11 +189,11 @@ class NumericField(LabelGenerator):
         if incremental:
             new_count = ex_count + count
             new_mean = (mean * count + ex_mean * ex_count) / new_count
-            new_stdev = ((ex_stdev ** 2) * ex_count + (stdev ** 2) * count) / new_count
+            new_stdev = math.sqrt(((ex_stdev ** 2) * ex_count + (stdev ** 2) * count) / new_count)
             self._model['mean'] = new_mean
             self._model['std_dev'] = new_stdev
             self._model['count'] = new_count
-
+            
         return self._model
 
     def __call__(self, input_object: dict) -> [str]:
@@ -413,7 +413,7 @@ class MultinomialFieldCombiner(LabelGenerator):
                        }
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
-        pair2count = self.model['pair2count'] #this is used for incremental updates
+        pair2count = self._model['pair2count']  # this is used for incremental updates
         total = 0
         for item in dataset:
             combined = [str(item[field]) for field in self._model['field_names']]

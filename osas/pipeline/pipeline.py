@@ -85,22 +85,27 @@ class Pipeline:
         da = DetectAnomalies()
         self._detect_anomalies = da.get_pretrained_model(self._scoring_model_name, json.dumps(pretrained['scoring']))
 
-    def build_pipeline(self, dataset: Datasource) -> dict:
+    def build_pipeline(self, dataset: Datasource, incremental=False) -> dict:
         '''
         Generates a JSON serializable object that contains data for all pretrained label generators
         :param dataset: dataset to train the model on
         :return: serializable dict object
         '''
         gd = GroomData()
+        ex_pipeline = self._pipeline
         self._pipeline = []
         final_model = {'model': {}}
+        index = 0
         for sect in self.config:
             print('\t::{0}'.format(sect))
             if 'generator_type' in self.config[sect]:
                 for key in self.config[sect]:
                     print("\t\t::{0} = {1}".format(key, self.config[sect][key]))
-                lg = gd.label_generator(self.config[sect]['generator_type'], self.config[sect])
-
+                if incremental:
+                    lg = ex_pipeline[index]
+                else:
+                    lg = gd.label_generator(self.config[sect]['generator_type'], self.config[sect])
+                index += 1
                 print("\t\t::OBJECT: {0}".format(lg))
                 sys.stdout.write('\t\t::BUILDING MODEL...')
                 sys.stdout.flush()
