@@ -162,16 +162,29 @@ class SVDAnomaly(AnomalyDetection):
         self._data_encoder = None
         self._model = None
 
-    def build_model(self, dataset: Datasource) -> dict:
-        data_encoder = MultiLabelBinarizer()
+    def build_model(self, dataset: Datasource, incremental=False) -> dict:
+
         labels = []
         for item in dataset:
-            labels.append(item['_labels'])
-        data_encoded = data_encoder.fit_transform(labels)
-        self._data_encoder = data_encoder
+            tmp = []
+            for label in item['_labels']:
+                if isinstance(label, str):
+                    tmp.append(label)
+            labels.append(tmp)
 
-        decompose = TruncatedSVD(n_components=4, n_iter=50, random_state=42)
-        decompose.fit(data_encoded)
+        if not incremental:
+            data_encoder = MultiLabelBinarizer()
+            data_encoded = data_encoder.fit_transform(labels)
+        else:
+            data_encoder = self._data_encoder
+            data_encoded = data_encoder.transform(labels)
+        self._data_encoder = data_encoder
+        if not incremental:
+            decompose = TruncatedSVD(n_components=4, n_iter=50, random_state=42)
+            decompose.fit(data_encoded)
+        else:
+            decompose = self._model
+            decompose.partial_fit(data_encoded)
 
         self._model = decompose
 
@@ -217,13 +230,15 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         super().__init__()
         self._model = None
 
-    def build_model(self, dataset: Datasource) -> dict:
-
-        model = {
-            '1': {'TOTAL': 0},
-            '2': {'TOTAL': 0},
-            '3': {'TOTAL': 0}
-        }
+    def build_model(self, dataset: Datasource, incremental=False) -> dict:
+        if not incremental:
+            model = {
+                '1': {'TOTAL': 0},
+                '2': {'TOTAL': 0},
+                '3': {'TOTAL': 0}
+            }
+        else:
+            model = self._model
         # for clarity, this code is written explicitly
         for item in tqdm.tqdm(dataset, ncols=100, desc="\tbuilding model"):
             tags = item['_labels']
@@ -348,6 +363,7 @@ class StatisticalNGramAnomaly(AnomalyDetection):
 
         return model
 
+
 class SupervisedClassifierAnomaly(AnomalyDetection):
     def __init__(self):
         super().__init__()
@@ -361,29 +377,34 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         self._is_binary_preds = False
         self._ind_to_ground_truth = None
 
-    def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str, init_args: dict) -> dict:
+    def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str, init_args: dict,
+                    incremental=False) -> dict:
         labels = []
         ground_truth_values = set()
-        encoder = MultiLabelBinarizer()
         for item in dataset:
             labels.append(item['_labels'])
             ground_truth_values.add(item[ground_truth_column])
-        labels_enc = encoder.fit_transform(labels)
-        
+        if not incremental:
+            encoder = MultiLabelBinarizer()
+            labels_enc = encoder.fit_transform(labels)
+        else:
+            encoder = self._encoder
+            labels_enc = encoder.transform(labels)
+
         # set binary preds
         if ground_truth_values == self.BINARY_GROUND_TRUTHS1:
             # all grouth truth labels either clean or bad
             self._is_binary_preds = True
-            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH1 # set bad to index 1
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH1  # set bad to index 1
         elif ground_truth_values == self.BINARY_GROUND_TRUTHS2:
             # all grouth truth labels either 0 or 1
             self._is_binary_preds = True
-            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH2 # set 1 to index 1
+            ind_to_ground_truth = self.BINARY_IND_TO_GROUND_TRUTH2  # set 1 to index 1
         else:
             # ground truth labels can be anything
             self._is_binary_preds = False
             ind_to_ground_truth = list(ground_truth_values)
-        
+
         # convert ground truth values to indices
         ground_truth_to_ind = dict()
         for i in range(len(ind_to_ground_truth)):
@@ -392,17 +413,22 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         for item in dataset:
             gt = item[ground_truth_column]
             model_ground_truths.append(ground_truth_to_ind[gt])
-        
+
         # get the classifier
-        try:
-            clf_parts = classifier.split('.')
-            assert clf_parts[0] == 'sklearn'
-            sk_pkg = importlib.import_module('{:s}.{:s}'.format(clf_parts[0], clf_parts[1]))
-            clf_class = getattr(sys.modules[sk_pkg.__name__], clf_parts[2])
-        except:
-            raise Exception('expected classifier to be in sklearn package format: sklearn.<package>.<class> (ex. sklearn.linear_model.LogisiticRegression)')
-        clf = clf_class(**init_args) # dict unpacking for init args
-        clf.fit(labels_enc, model_ground_truths)
+        if not incremental:
+            try:
+                clf_parts = classifier.split('.')
+                assert clf_parts[0] == 'sklearn'
+                sk_pkg = importlib.import_module('{:s}.{:s}'.format(clf_parts[0], clf_parts[1]))
+                clf_class = getattr(sys.modules[sk_pkg.__name__], clf_parts[2])
+            except:
+                raise Exception(
+                    'expected classifier to be in sklearn package format: sklearn.<package>.<class> (ex. sklearn.linear_model.LogisiticRegression)')
+            clf = clf_class(**init_args)  # dict unpacking for init args
+            clf.fit(labels_enc, model_ground_truths)
+        else:
+            clf = self._model
+            clf.partial_fit(labels_enc, model_ground_truths)
 
         # return model
         self._encoder = encoder
@@ -417,22 +443,22 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         out_model = base64.b64encode(pickle.dumps(model)).decode('ascii')
         model = {'model': out_model}
         return model
-        
+
     def __call__(self, dataset: Datasource) -> [float]:
         labels = []
         for item in dataset:
             labels.append(item['_labels'])
         labels_enc = self._encoder.transform(labels)
-    
+
         preds = self._model.predict_proba(labels_enc)
         if self._is_binary_preds:
             # return the "bad" prob
             preds = [pred[1] for pred in preds]
         else:
             # return the class with most prob
-            preds = [self._ind_to_ground_truth[np.argmax(pred)] for pred in preds]       
+            preds = [self._ind_to_ground_truth[np.argmax(pred)] for pred in preds]
         return preds
-       
+
     @staticmethod
     def from_pretrained(pretrained: str) -> AnomalyDetection:
         tmp = json.loads(pretrained)

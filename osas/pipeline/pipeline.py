@@ -113,10 +113,14 @@ class Pipeline:
                 final_model['model'][sect] = lg_model
                 sys.stdout.write('done\n')
                 self._pipeline.append(lg)
+        # remove anomaly detection update (not all models support incremental because of sklearn dependencies)
+        if incremental:
+            return
         self(dataset, dest_field_labels='_labels')
         da = DetectAnomalies()
-        self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
-                                                    load_config=False)
+        if not incremental:
+            self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
+                                                        load_config=False)
         # check for classifier scoring and if so, add grouth truth column and classifier as param
         if self.config['AnomalyScoring']['scoring_algorithm'] == 'SupervisedClassifierAnomaly':
             ground_truth_column = self.config['AnomalyScoring']['ground_truth_column']
@@ -134,9 +138,13 @@ class Pipeline:
                     # it will be a string otherwise
                     pass
             # build model
-            scoring_model = self._detect_anomalies.build_model(dataset, ground_truth_column, classifier, init_args)
+            scoring_model = self._detect_anomalies.build_model(dataset,
+                                                               ground_truth_column,
+                                                               classifier,
+                                                               init_args,
+                                                               incremental=incremental)
         else:
-            scoring_model = self._detect_anomalies.build_model(dataset)
+            scoring_model = self._detect_anomalies.build_model(dataset, incremental=incremental)
         final_model['scoring'] = scoring_model
         return final_model
 

@@ -193,7 +193,7 @@ class NumericField(LabelGenerator):
             self._model['mean'] = new_mean
             self._model['std_dev'] = new_stdev
             self._model['count'] = new_count
-            
+
         return self._model
 
     def __call__(self, input_object: dict) -> [str]:
