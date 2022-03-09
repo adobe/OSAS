@@ -413,7 +413,7 @@ class MultinomialFieldCombiner(LabelGenerator):
                        }
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
-        pair2count = {}
+        pair2count = self.model['pair2count'] #this is used for incremental updates
         total = 0
         for item in dataset:
             combined = [str(item[field]) for field in self._model['field_names']]
