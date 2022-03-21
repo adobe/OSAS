@@ -278,8 +278,8 @@ class TextField(LabelGenerator):
                     self._model[ngram] += occ_number
                 else:
                     self._model[ngram] = occ_number
-        for ngram in self._model:
-            self._model[ngram] = math.log(self._model[ngram]) + 1
+        # for ngram in self._model:
+        #     self._model[ngram] =
         ser_model = [self._field_name, self._lm_mode, self._ngram_range[0], self._ngram_range[1], self._mean_perplex,
                      self._std_perplex, self._total_inf]
 
@@ -305,7 +305,7 @@ class TextField(LabelGenerator):
 
         for ngram in ngrams:
             if ngram in self._model:
-                sup_count = self._model[ngram]
+                sup_count = math.log(self._model[ngram]) + 1
                 total += 1 / sup_count
                 # if ngram[:-1] in self._model:
                 #     inf_count = self._model[ngram[:-1]]

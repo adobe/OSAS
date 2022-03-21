@@ -114,8 +114,10 @@ class Pipeline:
                 sys.stdout.write('done\n')
                 self._pipeline.append(lg)
         # remove anomaly detection update (not all models support incremental because of sklearn dependencies)
-        if incremental:
-            return
+        # if incremental:
+        #     final_model['scoring'] = self._detect_anomalies
+        #     return final_model
+
         self(dataset, dest_field_labels='_labels')
         da = DetectAnomalies()
         if not incremental:
