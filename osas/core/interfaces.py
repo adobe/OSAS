@@ -183,10 +183,11 @@ class AnomalyDetection:
         pass
 
     @abstractmethod
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, incremental: bool = False) -> dict:
         """
         This model should generate a model on the input
         :param dataset: the dataset used to generate the model
+        :param incremental: perform incremental update
         :return: This should be a json serializable object
         """
         pass

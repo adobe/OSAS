@@ -85,22 +85,27 @@ class Pipeline:
         da = DetectAnomalies()
         self._detect_anomalies = da.get_pretrained_model(self._scoring_model_name, json.dumps(pretrained['scoring']))
 
-    def build_pipeline(self, dataset: Datasource) -> dict:
+    def build_pipeline(self, dataset: Datasource, incremental=False) -> dict:
         '''
         Generates a JSON serializable object that contains data for all pretrained label generators
         :param dataset: dataset to train the model on
         :return: serializable dict object
         '''
         gd = GroomData()
+        ex_pipeline = self._pipeline
         self._pipeline = []
         final_model = {'model': {}}
+        index = 0
         for sect in self.config:
             print('\t::{0}'.format(sect))
             if 'generator_type' in self.config[sect]:
                 for key in self.config[sect]:
                     print("\t\t::{0} = {1}".format(key, self.config[sect][key]))
-                lg = gd.label_generator(self.config[sect]['generator_type'], self.config[sect])
-
+                if incremental:
+                    lg = ex_pipeline[index]
+                else:
+                    lg = gd.label_generator(self.config[sect]['generator_type'], self.config[sect])
+                index += 1
                 print("\t\t::OBJECT: {0}".format(lg))
                 sys.stdout.write('\t\t::BUILDING MODEL...')
                 sys.stdout.flush()
@@ -108,10 +113,16 @@ class Pipeline:
                 final_model['model'][sect] = lg_model
                 sys.stdout.write('done\n')
                 self._pipeline.append(lg)
+        # remove anomaly detection update (not all models support incremental because of sklearn dependencies)
+        # if incremental:
+        #     final_model['scoring'] = self._detect_anomalies
+        #     return final_model
+
         self(dataset, dest_field_labels='_labels')
         da = DetectAnomalies()
-        self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
-                                                    load_config=False)
+        if not incremental:
+            self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
+                                                        load_config=False)
         # check for classifier scoring and if so, add grouth truth column and classifier as param
         if self.config['AnomalyScoring']['scoring_algorithm'] == 'SupervisedClassifierAnomaly':
             ground_truth_column = self.config['AnomalyScoring']['ground_truth_column']
@@ -129,9 +140,13 @@ class Pipeline:
                     # it will be a string otherwise
                     pass
             # build model
-            scoring_model = self._detect_anomalies.build_model(dataset, ground_truth_column, classifier, init_args)
+            scoring_model = self._detect_anomalies.build_model(dataset,
+                                                               ground_truth_column,
+                                                               classifier,
+                                                               init_args,
+                                                               incremental=incremental)
         else:
-            scoring_model = self._detect_anomalies.build_model(dataset)
+            scoring_model = self._detect_anomalies.build_model(dataset, incremental=incremental)
         final_model['scoring'] = scoring_model
         return final_model
 

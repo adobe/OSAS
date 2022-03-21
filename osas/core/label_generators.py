@@ -156,17 +156,43 @@ class NumericField(LabelGenerator):
         self._model = {
             'mean': None,
             'std_dev': None,
+            'count': 0,
             'field_name': field_name
         }
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         from osas.data.datasources import CSVDataColumn
+        incremental = False
+        if self._model['mean'] is not None:
+            ex_mean = self._model['mean']
+            ex_stdev = self._model['std_dev']
+            ex_count = self._model['count']
+            incremental = True
         if count_column is None:
-            self._model['mean'] = CSVDataColumn(dataset[self._model['field_name']]).mean()
-            self._model["std_dev"] = CSVDataColumn(dataset[self._model['field_name']]).std()
+            mean = CSVDataColumn(dataset[self._model['field_name']]).mean()
+            stdev = CSVDataColumn(dataset[self._model['field_name']]).std()
+            count = len(dataset[self._model['field_name']])
+            self._model['mean'] = mean
+            self._model['std_dev'] = stdev
+            self._model['count'] = count
         else:
-            self._model['mean'] = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).mean()
-            self._model["std_dev"] = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).std()
+            mean = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).sum()
+            stdev = ((CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]) - mean) ** 2).sum()
+            count = dataset[count_column].sum()
+            mean = mean / count
+            stdev = math.sqrt(stdev / count)
+
+            self._model['mean'] = mean
+            self._model['std_dev'] = stdev
+            self._model['count'] = count
+
+        if incremental:
+            new_count = ex_count + count
+            new_mean = (mean * count + ex_mean * ex_count) / new_count
+            new_stdev = math.sqrt(((ex_stdev ** 2) * ex_count + (stdev ** 2) * count) / new_count)
+            self._model['mean'] = new_mean
+            self._model['std_dev'] = new_stdev
+            self._model['count'] = new_count
 
         return self._model
 
@@ -252,8 +278,8 @@ class TextField(LabelGenerator):
                     self._model[ngram] += occ_number
                 else:
                     self._model[ngram] = occ_number
-        for ngram in self._model:
-            self._model[ngram] = math.log(self._model[ngram]) + 1
+        # for ngram in self._model:
+        #     self._model[ngram] =
         ser_model = [self._field_name, self._lm_mode, self._ngram_range[0], self._ngram_range[1], self._mean_perplex,
                      self._std_perplex, self._total_inf]
 
@@ -279,7 +305,7 @@ class TextField(LabelGenerator):
 
         for ngram in ngrams:
             if ngram in self._model:
-                sup_count = self._model[ngram]
+                sup_count = math.log(self._model[ngram]) + 1
                 total += 1 / sup_count
                 # if ngram[:-1] in self._model:
                 #     inf_count = self._model[ngram[:-1]]
@@ -387,7 +413,7 @@ class MultinomialFieldCombiner(LabelGenerator):
                        }
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
-        pair2count = {}
+        pair2count = self._model['pair2count']  # this is used for incremental updates
         total = 0
         for item in dataset:
             combined = [str(item[field]) for field in self._model['field_names']]

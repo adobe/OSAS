@@ -38,7 +38,9 @@ def process(params):
     datasource = CSVDataSource(params.input_file)
     p = Pipeline('DEV')
     p.load_config(params.conf_file)
-    model = p.build_pipeline(datasource)
+    if params.incremental:
+        p.load_model(params.orig_model_file)
+    model = p.build_pipeline(datasource, incremental=params.incremental)
     json.dump(model, open(params.model_file, 'w'))
 
 
@@ -48,10 +50,23 @@ if __name__ == '__main__':
     parser.add_option('--conf-file', action='store', dest='conf_file', help='location of pipeline configuration file')
     parser.add_option('--model-file', action='store', dest='model_file',
                       help='location where to store the pretrained pipeline file')
+    parser.add_option('--orig-model-file', action='store', dest='orig_model_file',
+                      help='location where to store the pretrained pipeline file')
+    parser.add_option('--incremental', action='store_true', help='perform incremental update on the model (will load '
+                                                                 '--orig-model-file and save at location specified by '
+                                                                 '--model-file)')
 
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:
-        process(params)
+        if params.incremental and params.orig_model_file:
+            process(params)
+        else:
+            if params.incremental:
+                print("Must specify --orig-model-file")
+            elif params.orig_model_file:
+                print("--orig-model-file must be used with --incremental")
+            else:
+                process(params)
     else:
         parser.print_help()
