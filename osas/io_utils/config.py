@@ -110,6 +110,8 @@ class MultinomialField(Config):
     field_name: str = field(default='user')
     absolute_threshold: int = field(default=10)
     relative_threshold: float = field(default=0.1)
+    group_by: str = field(default=None)
+
 
 @dataclass
 class LOLField(Config):
@@ -128,6 +130,7 @@ class MultinomialFieldCombiner(Config):
     field_names: list = field(default_factory=lambda: [])
     absolute_threshold: float = field(default=500)
     relative_threshold: float = field(default=0.005)
+    group_by: str = field(default=None)
 
 
 @dataclass

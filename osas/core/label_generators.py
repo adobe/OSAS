@@ -370,14 +370,15 @@ class TextField(LabelGenerator):
 
 
 class MultinomialField(LabelGenerator):
-    def __init__(self, field_name: str = '', absolute_threshold: int = 10, relative_threshold: float = 0.1):
+    def __init__(self, field_name: str = '', absolute_threshold: int = 10, relative_threshold: float = 0.1,
+                 group_by: str = None):
         """
         Constructor
         :param field_name: What field to use
         :param absolute_threshold: Minimum absolute value for occurrences to trigger alert for
         :param relative_threshold: Minimum relative value for occurrences to trigger alert for
         """
-        self._mfc = MultinomialFieldCombiner([field_name], absolute_threshold, relative_threshold)
+        self._mfc = MultinomialFieldCombiner([field_name], absolute_threshold, relative_threshold, group_by=group_by)
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return self._mfc.build_model(dataset, count_column)
@@ -397,38 +398,56 @@ class MultinomialField(LabelGenerator):
 
 
 class MultinomialFieldCombiner(LabelGenerator):
-    def __init__(self, field_names: [str] = [], absolute_threshold: int = 10, relative_threshold: float = 0.1):
+    def __init__(self, field_names: [str] = [], absolute_threshold: int = 10, relative_threshold: float = 0.1,
+                 group_by: str = None):
         """
         Constructor
         :param field_names: What fields to combine
         :param absolute_threshold: Minimum absolute value for occurrences to trigger alert for
         :param relative_threshold: Minimum relative value for occurrences to trigger alert for
         """
-
         self._model = {'pair2count': {},
                        'pair2prob': {},
                        'absolute_threshold': absolute_threshold,
                        'relative_threshold': relative_threshold,
-                       'field_names': field_names
+                       'field_names': field_names,
+                       'group_by': group_by
                        }
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pair2count = self._model['pair2count']  # this is used for incremental updates
+        group_by_field = self._model['group_by']
         total = 0
         for item in dataset:
+            if group_by_field is not None:
+                gbv = str(item[group_by_field])
+                if gbv not in self._model['pair2count']:
+                    self._model['pair2count'][gbv] = {'TOTAL': 0}
+                pair2count = self._model['pair2count'][gbv]
             combined = [str(item[field]) for field in self._model['field_names']]
             combined = '(' + ','.join(combined) + ')'
             occ_number = 1
             if count_column is not None:
                 occ_number = item[count_column]
             total += occ_number
+            if group_by_field is not None:
+                self._model['pair2count'][gbv]['TOTAL'] += occ_number
             if combined not in pair2count:
                 pair2count[combined] = occ_number
             else:
                 pair2count[combined] += occ_number
+
         pair2prob = {}
-        for key in pair2count:
-            pair2prob[key] = pair2count[key] / total
+        if group_by_field is None:
+            for key in pair2count:
+                pair2prob[key] = pair2count[key] / total
+        else:
+            pair2count = self._model['pair2count']
+            for k1 in pair2count:
+                pair2prob[k1] = {}
+                total = pair2count[k1]['TOTAL']
+                for key in pair2count[k1]:
+                    pair2prob[k1][key] = pair2count[k1][key] / total
 
         self._model['pair2count'] = pair2count
         self._model['pair2prob'] = pair2prob
@@ -439,13 +458,24 @@ class MultinomialFieldCombiner(LabelGenerator):
         fname = ('_'.join(self._model['field_names'])).upper() + '_PAIR'
         combined = [str(item[field]) for field in self._model['field_names']]
         combined = '(' + ','.join(combined) + ')'
-        if combined not in self._model['pair2count']:
+
+        pair2prob = self._model['pair2prob']
+        pair2count = self._model['pair2count']
+        group_by = self._model['group_by']
+        if group_by is not None:
+            gbv = str(item[group_by])
+            if gbv not in pair2prob:
+                return []
+            pair2prob = self._model['pair2prob'][gbv]
+            pair2count = self._model['pair2count'][gbv]
+
+        if combined not in pair2prob:
             return ['UNSEEN_' + fname]
         else:
             labels = []
 
-            prob = self._model['pair2prob'][combined]
-            cnt = self._model['pair2count'][combined]
+            prob = pair2prob[combined]
+            cnt = pair2count[combined]
 
             if cnt < self._model['absolute_threshold']:
                 labels.append('LOW_OBS_COUNT_FOR_' + fname)
