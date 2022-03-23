@@ -75,6 +75,7 @@ generator_type = MultinomialField
 field_name = <FIELD_NAME>
 absolute_threshold = 10
 relative_threshold = 0.1
+group_by = None # this is an optional field
 
 [LG_TEXT]
 generator_type = TextField
@@ -91,6 +92,7 @@ generator_type = MultinomialFieldCombiner
 field_names = ['<FIELD_1>', '<FIELD_2>', ...]
 absolute_threshold = 10
 relative_threshold = 0.1
+group_by = None # this is an optional field
 
 [LG_KEYWORD]
 generator_type = KeywordBased
@@ -151,7 +153,7 @@ Params:
 * ***ngram_range:*** N-gram range to use for computation
 
 **MultinomialField**
-* This type of LabelGenerator handles fields with discreet value sets. It computes the probability of seeing a specific value and alerts based on relative and absolute thresholds.
+* This type of LabelGenerator handles fields with discreet value sets. It computes the probability of seeing a specific value and alerts based on relative and absolute thresholds. If `group_by` is specified, this label generator will compute statistics for target values by first creating buckets.
 
 Params
 * ***field_name:*** What field to use
@@ -159,7 +161,7 @@ Params
 * ***relative_threshold:*** Minimum relative value for occurrences to trigger alert for
 
 **MultinomialFieldCombiner**
-* This type of LabelGenerator handles fields with discreet value sets and build advanced features by combining values across the same dataset entry. It computes the probability of seeing a specific value and alerts based on relative and absolute thresholds.
+* This type of LabelGenerator handles fields with discreet value sets and build advanced features by combining values across the same dataset entry. It computes the probability of seeing a specific value and alerts based on relative and absolute thresholds.  If `group_by` is specified, this label generator will compute statistics for target values by first creating buckets.
 
 Params
 * ***field_names:*** What fields to combine
