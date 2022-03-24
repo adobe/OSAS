@@ -381,7 +381,7 @@ class MultinomialField(LabelGenerator):
         self._mfc = MultinomialFieldCombiner([field_name], absolute_threshold, relative_threshold, group_by=group_by)
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
-        return self._mfc.build_model(dataset, count_column)
+        return self._mfc.build_model(dataset, count_column=count_column)
 
     def __call__(self, item: dict) -> [str]:
         lbls = self._mfc(item)
