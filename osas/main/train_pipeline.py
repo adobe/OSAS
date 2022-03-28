@@ -41,7 +41,7 @@ def process(params):
     if params.incremental:
         p.load_model(params.orig_model_file)
     model = p.build_pipeline(datasource, incremental=params.incremental)
-    json.dump(model, open(params.model_file, 'w'))
+    json.dump(model, open(params.model_file, 'w'), indent=4)
 
 
 if __name__ == '__main__':

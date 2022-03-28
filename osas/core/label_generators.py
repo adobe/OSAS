@@ -414,13 +414,19 @@ class MultinomialFieldCombiner(LabelGenerator):
                        'group_by': group_by
                        }
 
+    def _get_group_by_value(self, item, group_by):
+        if isinstance(group_by, str):
+            return str(item[group_by])
+        else:
+            return "({0})".format(','.join([str(item[k]) for k in group_by]))
+
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pair2count = self._model['pair2count']  # this is used for incremental updates
         group_by_field = self._model['group_by']
         total = 0
         for item in dataset:
             if group_by_field is not None:
-                gbv = str(item[group_by_field])
+                gbv = self._get_group_by_value(item, group_by_field)  # str(item[group_by_field])
                 if gbv not in self._model['pair2count']:
                     self._model['pair2count'][gbv] = {'TOTAL': 0}
                 pair2count = self._model['pair2count'][gbv]
@@ -428,7 +434,7 @@ class MultinomialFieldCombiner(LabelGenerator):
             combined = '(' + ','.join(combined) + ')'
             occ_number = 1
             if count_column is not None:
-                occ_number = item[count_column]
+                occ_number = int(item[count_column])
             total += occ_number
             if group_by_field is not None:
                 self._model['pair2count'][gbv]['TOTAL'] += occ_number
@@ -445,7 +451,7 @@ class MultinomialFieldCombiner(LabelGenerator):
             pair2count = self._model['pair2count']
             for k1 in pair2count:
                 pair2prob[k1] = {}
-                total = pair2count[k1]['TOTAL']
+                total = int(pair2count[k1]['TOTAL'])
                 for key in pair2count[k1]:
                     pair2prob[k1][key] = pair2count[k1][key] / total
 
@@ -463,7 +469,7 @@ class MultinomialFieldCombiner(LabelGenerator):
         pair2count = self._model['pair2count']
         group_by = self._model['group_by']
         if group_by is not None:
-            gbv = str(item[group_by])
+            gbv = self._get_group_by_value(item, group_by)
             if gbv not in pair2prob:
                 return []
             pair2prob = self._model['pair2prob'][gbv]
