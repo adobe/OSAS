@@ -462,6 +462,12 @@ class MultinomialFieldCombiner(LabelGenerator):
 
     def __call__(self, item: dict) -> [str]:
         fname = ('_'.join(self._model['field_names'])).upper() + '_PAIR'
+        gname = ''
+        if self._model['group_by'] is not None:
+            gby = self._model['group_by']
+            if not isinstance(self._model['group_by'], list):
+                gby = [gby]
+            gname = '_BASED_ON_{0}'.format('_'.join([str(k).upper() for k in gby]))
         combined = [str(item[field]) for field in self._model['field_names']]
         combined = '(' + ','.join(combined) + ')'
 
@@ -476,7 +482,7 @@ class MultinomialFieldCombiner(LabelGenerator):
             pair2count = self._model['pair2count'][gbv]
 
         if combined not in pair2prob:
-            return ['UNSEEN_' + fname]
+            return ['UNSEEN_{0}{1}'.format(fname, gname)]
         else:
             labels = []
 
@@ -484,9 +490,9 @@ class MultinomialFieldCombiner(LabelGenerator):
             cnt = pair2count[combined]
 
             if cnt < self._model['absolute_threshold']:
-                labels.append('LOW_OBS_COUNT_FOR_' + fname)
+                labels.append('LOW_OBS_COUNT_FOR_{0}{1}'.format(fname, gname))
             if prob < self._model['relative_threshold']:
-                labels.append('LOW_OBS_PROB_FOR_' + fname)
+                labels.append('LOW_OBS_PROB_FOR_{0}{1}'.format(fname, gname))
         return labels
 
     @staticmethod

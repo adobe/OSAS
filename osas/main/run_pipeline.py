@@ -44,15 +44,19 @@ def process(params):
     if params.output_file:
         datasource.save(open(params.output_file, 'w'))
     # push to elasticsearch
-    es = Elasticsearch([{'host': 'localhost', 'port': 9200}], http_auth=('admin', 'admin'))
-    data = [item for item in datasource]
-    for item in data:
-        item['model'] = p._scoring_model_name
-        item['raw'] = str(item['labels'])
-        for key in item:
-            if item[key] == 'NaN' or (is_numeric(item[key]) and np.isnan(item[key])):
-                item[key] = None
-    helpers.bulk(es, data, index="anomalies", doc_type="type")
+    if not params.no_elastic:
+        try:
+            es = Elasticsearch([{'host': 'localhost', 'port': 9200}], http_auth=('admin', 'admin'))
+            data = [item for item in datasource]
+            for item in data:
+                item['model'] = p._scoring_model_name
+                item['raw'] = str(item['labels'])
+                for key in item:
+                    if item[key] == 'NaN' or (is_numeric(item[key]) and np.isnan(item[key])):
+                        item[key] = None
+            helpers.bulk(es, data, index="anomalies", doc_type="type")
+        except Exception as e:
+            sys.stdout.write('Unable to push data to ElasticSearch:  {0}\n'.format(str(e)))
 
 
 if __name__ == '__main__':
@@ -61,9 +65,14 @@ if __name__ == '__main__':
     parser.add_option('--conf-file', action='store', dest='conf_file', help='location of pipeline configuration file')
     parser.add_option('--model-file', action='store', dest='model_file', help='location of pretrained pipeline file')
     parser.add_option('--output-file', action='store', dest='output_file', help='output-file (optional)')
+    parser.add_option('--no-elastic', action='store_true', dest='no_elastic', help='don\'t push data to Elastic')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:
-        process(params)
+        if params.no_elastic and not params.output_file:
+            sys.stdout.write("This run will not produce any results. You need to either specify --output-file or "
+                             "remove --no-elastic\n")
+        else:
+            process(params)
     else:
         parser.print_help()
