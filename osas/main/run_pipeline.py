@@ -69,6 +69,10 @@ if __name__ == '__main__':
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:
-        process(params)
+        if params.no_elastic and not params.output_file:
+            sys.stdout.write("This run will not produce any results. You need to either specify --output-file or "
+                             "remove --no-elastic\n")
+        else:
+            process(params)
     else:
         parser.print_help()
