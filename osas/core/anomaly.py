@@ -44,7 +44,7 @@ class IFAnomaly(AnomalyDetection):
         self._data_encoder = None
         self._decompose = None
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, incremental=False) -> dict:
         data_encoder = MultiLabelBinarizer()
         labels = []
         for item in dataset:
@@ -103,7 +103,7 @@ class LOFAnomaly(AnomalyDetection):
         self._data_encoder = None
         self._decompose = None
 
-    def build_model(self, dataset: Datasource) -> dict:
+    def build_model(self, dataset: Datasource, incremental=False) -> dict:
         data_encoder = MultiLabelBinarizer()
         labels = []
         for item in dataset:
