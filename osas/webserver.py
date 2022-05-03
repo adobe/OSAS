@@ -20,6 +20,7 @@ from flask import Flask
 from flask import Response
 from flask import request
 from flask import render_template, send_from_directory, send_file
+from werkzeug.utils import safe_join
 from os import listdir
 from os.path import isfile, join
 import subprocess
@@ -34,7 +35,7 @@ import termios
 import fcntl
 
 if os.path.isdir('/app'):
-    data_path='/app/'
+    data_path = '/app/'
 else:
     data_path = 'tests/'
 
@@ -59,7 +60,7 @@ def assets(filename):
     # Send a file download response.
     # print(path)
     print(filename)
-    return send_file('templates/static/{0}'.format(filename))
+    return send_file(safe_join('templates/static/', filename))
 
 
 @app.route('/osas/console', methods=['GET', 'POST'])
@@ -254,9 +255,11 @@ def confirm_config():
 
             # print(config_obj)
             output = "tailored_" + input.replace('.conf', '')
-            Anomaly_list = ['StatisticalNGramAnomaly', 'SVDAnomaly', 'LOFAnomaly', 'IFAnomaly', 'SupervisedClassifierAnomaly']
+            Anomaly_list = ['StatisticalNGramAnomaly', 'SVDAnomaly',
+                            'LOFAnomaly', 'IFAnomaly', 'SupervisedClassifierAnomaly']
             return render_template("config_manual_update.html", files=files, len=len(files), config=config_data,
-                                   input=input, config_obj=config_obj, len_config=len(config_obj),
+                                   input=input, config_obj=config_obj, len_config=len(
+                                       config_obj),
                                    anomaly_alg=Anomaly_list, output=output)
 
         elif output != None:
@@ -289,7 +292,8 @@ def confirm_config():
                 model_args = model_args.split('\n')
                 for model_arg in model_args:
                     model_arg = model_arg.split('=')
-                    new_config['AnomalyScoring'][model_arg[0].strip()] = model_arg[1].strip()
+                    new_config['AnomalyScoring'][model_arg[0].strip()
+                                                 ] = model_arg[1].strip()
             with open(data_path + output, 'w') as configfile:
                 new_config.write(configfile)
             input_data = open('osas/templates/config_static.txt', 'r').read() + "\n\n" + open(data_path + output,
@@ -312,7 +316,8 @@ def confirm_config():
 def train_pipeline():
     print(request.method)
     if request.method == 'GET':
-        onlyfiles = [f for f in listdir(data_path) if isfile(join(data_path, f)) and '.conf' in f and '.model' not in f]
+        onlyfiles = [f for f in listdir(data_path) if isfile(
+            join(data_path, f)) and '.conf' in f and '.model' not in f]
         files = onlyfiles
 
         onlyfiles_dataset = [f for f in listdir(data_path) if
@@ -372,7 +377,8 @@ def run_pipeline():
                              isfile(join(data_path, f)) and '.conf' not in f and '.model' not in f]
         dataset = onlyfiles_dataset
 
-        onlyfiles_dataset = [f for f in listdir(data_path) if isfile(join(data_path, f)) and '.model' in f]
+        onlyfiles_dataset = [f for f in listdir(data_path) if isfile(
+            join(data_path, f)) and '.model' in f]
         pipeline = onlyfiles_dataset
 
         return render_template("run_pipeline.html", files=files, len=len(files), dataset=dataset,
@@ -438,12 +444,13 @@ def run_full_process():
 
         def inner():
             import datetime
-            stamp = str(datetime.datetime.now())[0:19].replace(' ', '_').replace(':', '_')
+            stamp = str(datetime.datetime.now())[
+                0:19].replace(' ', '_').replace(':', '_')
             key = input.split('.')[0] + "_" + stamp
             commands = []
             commands.append(
                 'python3 osas/main/autoconfig.py --input-file={} --output-file={}.conf 2>&1'.format(data_path + input,
-                                                                                                 data_path + key))
+                                                                                                    data_path + key))
             commands.append(
                 'python3 osas/main/train_pipeline.py --input-file={} --conf-file={}.conf --model-file={}.model 2>&1'.format(
                     data_path + input, data_path + key, data_path + key))
@@ -453,7 +460,8 @@ def run_full_process():
 
             for command in commands:
                 yield command + '<br/>\n' + '<br/>\n'
-                proc = subprocess.Popen([command], shell=True, stdout=subprocess.PIPE)
+                proc = subprocess.Popen(
+                    [command], shell=True, stdout=subprocess.PIPE)
 
                 for line in iter(proc.stdout.readline, ''):
 
