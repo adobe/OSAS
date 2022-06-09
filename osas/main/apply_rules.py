@@ -74,7 +74,7 @@ def _apply_rules(datasource: Datasource, rules: dict):
             rule_name = rule['rule name']
             rule_score = float(rule['rule score'])
             rule_label = rule['rule label']
-            cases = rule['cases']
+            cases = rule['conditions']
             for case in cases:
                 valid = True
                 for attribute_name in cases[case]:
