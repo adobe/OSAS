@@ -147,7 +147,7 @@ class NumericField(LabelGenerator):
     (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE, 2*sigma<value OUTLIER)
     """
 
-    def __init__(self, field_name: str = ''):
+    def __init__(self, field_name: str = '', group_by: str = None):
         """
         Constructor
         :param field_name: what field to look for in the data object
@@ -157,44 +157,145 @@ class NumericField(LabelGenerator):
             'mean': None,
             'std_dev': None,
             'count': 0,
-            'field_name': field_name
+            'field_name': field_name,
+            'group_by': group_by
         }
 
+    def _get_group_by_value(self, item, group_by):
+        if isinstance(group_by, str):
+            return str(item[group_by])
+        else:
+            return "({0})".format(','.join([str(item[k]) for k in group_by]))
+
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
-        from osas.data.datasources import CSVDataColumn
         incremental = False
         if self._model['mean'] is not None:
             ex_mean = self._model['mean']
             ex_stdev = self._model['std_dev']
             ex_count = self._model['count']
             incremental = True
-        if count_column is None:
-            mean = CSVDataColumn(dataset[self._model['field_name']]).mean()
-            stdev = CSVDataColumn(dataset[self._model['field_name']]).std()
-            count = len(dataset[self._model['field_name']])
-            self._model['mean'] = mean
-            self._model['std_dev'] = stdev
-            self._model['count'] = count
+        group_by = self._model['group_by']
+        if group_by is None:
+            mean = 0
+            stdev = 0
+            count = 0
         else:
-            mean = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).sum()
-            stdev = ((CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]) - mean) ** 2).sum()
-            count = dataset[count_column].sum()
-            mean = mean / count
-            stdev = math.sqrt(stdev / count)
+            mean = {}
+            stdev = {}
+            count = {}
+        # mean
+        for item in dataset:
+            cc = 1
+            if count_column is not None:
+                cc = int(item[count_column])
+            if group_by is None:
+                mean += item[self._model['field_name']] * cc
+                count += cc
+            else:
+                key = self._get_group_by_value(item, group_by)
+                if key not in mean:
+                    mean[key] = 0
+                    stdev[key] = 0
+                    count[key] = 0
+                mean[key] += item[self._model['field_name']] * cc
+                count[key] += cc
 
-            self._model['mean'] = mean
-            self._model['std_dev'] = stdev
-            self._model['count'] = count
+        if group_by is None:
+            mean /= count
+        else:
+            for key in mean:
+                mean[key] /= count[key]
+        # stdev
+        for item in dataset:
+            cc = 1
+            if count_column is not None:
+                cc = int(item[count_column])
+            if group_by is None:
+                stdev += ((item[self._model['field_name']] - mean) ** 2) * cc
+            else:
+                key = self._get_group_by_value(item, group_by)
+                stdev[key] += ((item[self._model['field_name']] - mean[key]) ** 2) * cc
 
+        if group_by is None:
+            stdev /= count
+            stdev = math.sqrt(stdev)
+        else:
+            for key in stdev:
+                stdev[key] /= count[key]
+                stdev[key] = math.sqrt(stdev[key])
+
+        # update if incremental
         if incremental:
-            new_count = ex_count + count
-            new_mean = (mean * count + ex_mean * ex_count) / new_count
-            new_stdev = math.sqrt(((ex_stdev ** 2) * ex_count + (stdev ** 2) * count) / new_count)
-            self._model['mean'] = new_mean
-            self._model['std_dev'] = new_stdev
-            self._model['count'] = new_count
+            if group_by is None:
+                new_mean = (ex_mean * ex_count + mean * count) / (ex_count + count)
+                new_stdev = (((ex_stdev ** 2) * ex_count) + ((stdev ** 2) * count)) / (ex_count + count)
+                new_count = ex_count + count
+            else:
+                new_mean = {}
+                new_stdev = {}
+                new_count = {}
+                for key in mean:
+                    if key in ex_mean:
+                        new_mean[key] = (ex_mean[key] * ex_count[key] + mean[key] * count[key]) / (
+                                ex_count[key] + count[key])
+                        new_stdev[key] = (((ex_stdev[key] ** 2) * ex_count[key]) + ((stdev[key] ** 2) * count[key])) / (
+                                ex_count[key] + count[key])
+                        new_count[key] = ex_count[key] + count[key]
+                    else:
+                        new_mean[key] = mean[key]
+                        new_stdev[key] = stdev[key]
+                        new_count[key] = count[key]
+                # transfer ex-valuez
+                for key in ex_mean:
+                    if key not in mean:
+                        new_mean[key] = ex_mean[key]
+                        new_stdev[key] = ex_stdev[key]
+                        new_count[key] = ex_count[key]
 
+            mean = new_mean
+            stdev = new_stdev
+            count = new_count
+        # store
+        self._model['mean'] = mean
+        self._model['std_dev'] = stdev
+        self._model['count'] = count
         return self._model
+
+    # def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
+    #     from osas.data.datasources import CSVDataColumn
+    #     incremental = False
+    #     if self._model['mean'] is not None:
+    #         ex_mean = self._model['mean']
+    #         ex_stdev = self._model['std_dev']
+    #         ex_count = self._model['count']
+    #         incremental = True
+    #     if count_column is None:
+    #         mean = CSVDataColumn(dataset[self._model['field_name']]).mean()
+    #         stdev = CSVDataColumn(dataset[self._model['field_name']]).std()
+    #         count = len(dataset[self._model['field_name']])
+    #         self._model['mean'] = mean
+    #         self._model['std_dev'] = stdev
+    #         self._model['count'] = count
+    #     else:
+    #         mean = CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]).sum()
+    #         stdev = ((CSVDataColumn(dataset[self._model['field_name']] * dataset[count_column]) - mean) ** 2).sum()
+    #         count = dataset[count_column].sum()
+    #         mean = mean / count
+    #         stdev = math.sqrt(stdev / count)
+    #
+    #         self._model['mean'] = mean
+    #         self._model['std_dev'] = stdev
+    #         self._model['count'] = count
+    #
+    #     if incremental:
+    #         new_count = ex_count + count
+    #         new_mean = (mean * count + ex_mean * ex_count) / new_count
+    #         new_stdev = math.sqrt(((ex_stdev ** 2) * ex_count + (stdev ** 2) * count) / new_count)
+    #         self._model['mean'] = new_mean
+    #         self._model['std_dev'] = new_stdev
+    #         self._model['count'] = new_count
+    #
+    #     return self._model
 
     def __call__(self, input_object: dict) -> [str]:
         labels = []
@@ -205,15 +306,27 @@ class NumericField(LabelGenerator):
             cur_value = float(input_object[self._model['field_name']])
         except:
             return ['{0}_BAD_VALUE'.format(field_name)]
+        group_by = self._model['group_by']
+        if group_by is None:
+            distance = abs((cur_value) - mean_val)
 
-        distance = abs((cur_value) - mean_val)
+            if distance <= std_val:
+                labels.append(field_name + '_NORMAL')
+            elif std_val < distance <= (2 * std_val):
+                labels.append(field_name + '_BORDERLINE')
+            elif (2 * std_val) < distance:
+                labels.append(field_name + '_OUTLIER')
+        else:
+            key = self._get_group_by_value(input_object, group_by)
+            if key in mean_val:
+                distance = abs((cur_value) - mean_val[key])
 
-        if distance <= std_val:
-            labels.append(field_name + '_NORMAL')
-        elif std_val < distance <= (2 * std_val):
-            labels.append(field_name + '_BORDERLINE')
-        elif (2 * std_val) < distance:
-            labels.append(field_name + '_OUTLIER')
+                if distance <= std_val[key]:
+                    labels.append(field_name + '_NORMAL')
+                elif std_val < distance <= (2 * std_val[key]):
+                    labels.append(field_name + '_BORDERLINE')
+                elif (2 * std_val[key]) < distance:
+                    labels.append(field_name + '_OUTLIER')
 
         return labels
 
