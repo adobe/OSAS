@@ -325,7 +325,7 @@ class NumericField(LabelGenerator):
 
                     if distance <= std_val[key]:
                         labels.append(field_name + '_NORMAL')
-                    elif std_val < distance <= (2 * std_val[key]):
+                    elif std_val[key] < distance <= (2 * std_val[key]):
                         labels.append(field_name + '_BORDERLINE')
                     elif (2 * std_val[key]) < distance:
                         labels.append(field_name + '_OUTLIER')
