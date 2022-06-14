@@ -301,6 +301,7 @@ class NumericField(LabelGenerator):
         labels = []
         mean_val = self._model['mean']
         std_val = self._model['std_dev']
+        count_val = self._model['count']
         field_name = self._model['field_name'].upper()
         try:
             cur_value = float(input_object[self._model['field_name']])
@@ -309,7 +310,6 @@ class NumericField(LabelGenerator):
         group_by = self._model['group_by']
         if group_by is None:
             distance = abs((cur_value) - mean_val)
-
             if distance <= std_val:
                 labels.append(field_name + '_NORMAL')
             elif std_val < distance <= (2 * std_val):
@@ -319,14 +319,20 @@ class NumericField(LabelGenerator):
         else:
             key = self._get_group_by_value(input_object, group_by)
             if key in mean_val:
-                distance = abs((cur_value) - mean_val[key])
+                count = count_val[key]
+                if count > 5:
+                    distance = abs((cur_value) - mean_val[key])
 
-                if distance <= std_val[key]:
-                    labels.append(field_name + '_NORMAL')
-                elif std_val < distance <= (2 * std_val[key]):
-                    labels.append(field_name + '_BORDERLINE')
-                elif (2 * std_val[key]) < distance:
-                    labels.append(field_name + '_OUTLIER')
+                    if distance <= std_val[key]:
+                        labels.append(field_name + '_NORMAL')
+                    elif std_val < distance <= (2 * std_val[key]):
+                        labels.append(field_name + '_BORDERLINE')
+                    elif (2 * std_val[key]) < distance:
+                        labels.append(field_name + '_OUTLIER')
+                else:
+                    labels.append('RARE_KEY_FOR_{0}'.format(field_name))
+            else:
+                labels.append('UNSEEN_KEY_FOR_{0}'.format(field_name))
 
         return labels
 
