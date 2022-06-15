@@ -75,7 +75,7 @@ generator_type = MultinomialField
 field_name = <FIELD_NAME>
 absolute_threshold = 10
 relative_threshold = 0.1
-group_by = None # this is an optional field
+group_by = None # this is an optional field - it can be a single attribute name or a list of names
 
 [LG_TEXT]
 generator_type = TextField
@@ -86,13 +86,14 @@ ngram_range = (3, 5)
 [LG_NUMERIC]
 generator_type = NumericField
 field_name = <FIELD_NAME>
+group_by = None # this is an optional field - it can be a single attribute name or a list of names
 
 [LG_MUTLINOMIAL_COMBINER]
 generator_type = MultinomialFieldCombiner
 field_names = ['<FIELD_1>', '<FIELD_2>', ...]
 absolute_threshold = 10
 relative_threshold = 0.1
-group_by = None # this is an optional field
+group_by = None # this is an optional field - it can be a single attribute name or a list of names
 
 [LG_KEYWORD]
 generator_type = KeywordBased
@@ -138,6 +139,7 @@ There are two main component classes: LabelGenerator and ScoringAlgorithm.
 
 Params:
 * ***field_name***: what field to look for in the data object
+* ***group_by***: when this field is set (not None), statistics are built around the groups obtained using the values of the specified attribute names. For instance, you can use this to compute CPU usage anomalies based on the `station_name` or `cloud_account_id`
 
 **TextField**
 
@@ -159,6 +161,7 @@ Params
 * ***field_name:*** What field to use
 * ***absolute_threshold:*** Minimum absolute value for occurrences to trigger alert for
 * ***relative_threshold:*** Minimum relative value for occurrences to trigger alert for
+* ***group_by***: when this field is set (not None), statistics are built around the groups obtained using the values of the specified attribute names. For instance, you can use this to compute anomalies for `country_name` login based on the `username`
 
 **MultinomialFieldCombiner**
 * This type of LabelGenerator handles fields with discreet value sets and build advanced features by combining values across the same dataset entry. It computes the probability of seeing a specific value and alerts based on relative and absolute thresholds.  If `group_by` is specified, this label generator will compute statistics for target values by first creating buckets.
@@ -167,6 +170,7 @@ Params
 * ***field_names:*** What fields to combine
 * ***absolute_threshold:*** Minimum absolute value for occurrences to trigger alert for
 * ***relative_threshold:*** Minimum relative value for occurrences to trigger alert for
+* ***group_by***: when this field is set (not None), statistics are built around the groups obtained using the values of the specified attribute names. The same explanation as the one above applies here
 
 **KeywordBased**
 * This is a rule-based label generators. It applies a simple tokenization procedure on input text, by dropping special characters and numbers and splitting on white-space. It then looks for a specific set of keywords and generates labels accordingly
