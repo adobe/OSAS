@@ -96,6 +96,7 @@ class ObfuscationField(Config):
 @dataclass
 class NumericField(Config):
     field_name: str = field(default='count')
+    group_by: str = field(default=None)
 
 
 @dataclass
