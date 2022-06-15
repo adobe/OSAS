@@ -94,6 +94,13 @@ class DataColumn:
         """
         pass
 
+    @abstractmethod
+    def __setitem__(self, index: int, value: Any) -> dict:
+        """Sets the value for an item
+        :param index - the index of the element
+        """
+        pass
+
     def __iter__(self):
         return DatasourceIterator(self)
 

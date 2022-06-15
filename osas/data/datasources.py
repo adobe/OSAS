@@ -17,7 +17,7 @@
 #
 
 import sys
-from typing import Union
+from typing import Any
 
 import pandas as pd
 import numbers
@@ -61,6 +61,9 @@ class CSVDataColumn(DataColumn):
 
     def __getitem__(self, index: int) -> dict:
         return self._data[index]
+
+    def __setitem__(self, index: int, value: Any) -> dict:
+        self._data.iloc[index] = value
 
 
 class CSVDataSource(Datasource):
