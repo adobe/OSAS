@@ -17,6 +17,7 @@
 #
 
 import optparse
+import re
 import sys
 
 import tqdm
@@ -60,7 +61,6 @@ def _load_rules(rules_folder: str) -> dict:
             if 'rule score' not in rules_pack:
                 sys.stdout.write('Invalid rule file {0}. Missing rule score\n'.format(file))
                 sys.exit(0)
-
             all_rules.append(rules_pack)
     return all_rules
 
@@ -69,6 +69,7 @@ def _apply_rules(datasource: Datasource, rules: dict):
     scores = datasource['score']
     labels = datasource['labels']
     index = 0
+    regex_cache = {}
     for item in tqdm.tqdm(datasource):
         for rule in rules:
             rule_name = rule['rule name']
@@ -86,7 +87,10 @@ def _apply_rules(datasource: Datasource, rules: dict):
                         sys.exit(0)
                     found = False
                     for attribute_value in attribute_values:
-                        if attribute_value in item[attribute_name]:
+                        if attribute_value not in regex_cache:
+                            regex_cache[attribute_value] = re.compile(attribute_value)
+                        compiled_regex=regex_cache[attribute_value]
+                        if compiled_regex.match(item[attribute_name]):
                             found = True
                             break
                     if not found:
