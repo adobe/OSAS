@@ -147,18 +147,31 @@ class NumericField(LabelGenerator):
     (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE, 2*sigma<value OUTLIER)
     """
 
-    def __init__(self, field_name: str = '', group_by: str = None):
+    def __init__(self,
+                 field_name: str = '',
+                 group_by: str = None,
+                 mode: str = 'stdev',
+                 borderline_threshold: float = 1,
+                 outlier_threshold: float = 2,
+                 label_for_normal: bool = True):
         """
         Constructor
         :param field_name: what field to look for in the data object
         """
+
+        if mode != 'stdev' and mode != 'spike' and mode != 'inverted_spike':
+            print("Unknown mode {0} for NumericField. Expected 'stdev', 'spike' or 'inverted_spike'")
 
         self._model = {
             'mean': None,
             'std_dev': None,
             'count': 0,
             'field_name': field_name,
-            'group_by': group_by
+            'group_by': group_by,
+            'mode': mode,
+            'borderline_threshold': borderline_threshold,
+            'outlier_threshold': outlier_threshold,
+            'label_for_normal': label_for_normal
         }
 
     def _get_group_by_value(self, item, group_by):
@@ -297,38 +310,92 @@ class NumericField(LabelGenerator):
     #
     #     return self._model
 
+    def _get_labels(self, cur_value, mean_val, std_val, mode, label_for_normal, borderline_threshold,
+                    outlier_threshold):
+        labels = []
+        if mode == 'stdev':
+            ratio = abs(cur_value - mean_val) / std_val
+        elif mode == 'spike':
+            ratio = cur_value / mean_val
+        else:
+            ratio = mean_val / cur_value
+        field_name = self._model['field_name'].upper()
+
+        if label_for_normal and ratio < borderline_threshold:
+            labels.append('{0}_NORMAL'.format(field_name))
+        if borderline_threshold < ratio < outlier_threshold:
+            labels.append('{0}_BORDERLINE'.format(field_name))
+        elif ratio > outlier_threshold:
+            labels.append('{0}_OUTLIER'.format(field_name))
+        return labels
+
     def __call__(self, input_object: dict) -> [str]:
         labels = []
         mean_val = self._model['mean']
         std_val = self._model['std_dev']
         count_val = self._model['count']
         field_name = self._model['field_name'].upper()
+        label_for_normal = True
+        if 'label_for_normal' in self._model:
+            label_for_normal = self._model['label_for_normal']
+
+        mode = 'stdev'
+        if 'mode' in self._model:
+            mode = self._model['mode']
+
+        outlier_threshold = 1
+        if 'outlier_threshold' in self._model:
+            outlier_threshold = self._model['outlier_threshold']
+
+        borderline_threshold = True
+        if 'borderline_threshold' in self._model:
+            borderline_threshold = self._model['borderline_threshold']
+
         try:
             cur_value = float(input_object[self._model['field_name']])
         except:
             return ['{0}_BAD_VALUE'.format(field_name)]
         group_by = self._model['group_by']
         if group_by is None:
-            distance = abs((cur_value) - mean_val)
-            if distance <= std_val:
-                labels.append(field_name + '_NORMAL')
-            elif std_val < distance <= (2 * std_val):
-                labels.append(field_name + '_BORDERLINE')
-            elif (2 * std_val) < distance:
-                labels.append(field_name + '_OUTLIER')
+            new_labels = self._get_labels(cur_value,
+                                          mean_val,
+                                          std_val,
+                                          mode,
+                                          label_for_normal,
+                                          borderline_threshold,
+                                          outlier_threshold)
+            for label in new_labels:
+                labels.append(label)
+            # distance = abs((cur_value) - mean_val)
+            # if label_for_normal and distance <= std_val:
+            #     labels.append(field_name + '_NORMAL')
+            # elif std_val < distance <= (2 * std_val):
+            #     labels.append(field_name + '_BORDERLINE')
+            # elif (2 * std_val) < distance:
+            #     labels.append(field_name + '_OUTLIER')
         else:
             key = self._get_group_by_value(input_object, group_by)
             if key in mean_val:
                 count = count_val[key]
                 if count > 5:
-                    distance = abs((cur_value) - mean_val[key])
+                    new_labels = self._get_labels(cur_value,
+                                                  mean_val[key],
+                                                  std_val[key],
+                                                  mode,
+                                                  label_for_normal,
+                                                  borderline_threshold,
+                                                  outlier_threshold)
+                    for label in new_labels:
+                        labels.append(label)
 
-                    if distance <= std_val[key]:
-                        labels.append(field_name + '_NORMAL')
-                    elif std_val[key] < distance <= (2 * std_val[key]):
-                        labels.append(field_name + '_BORDERLINE')
-                    elif (2 * std_val[key]) < distance:
-                        labels.append(field_name + '_OUTLIER')
+                    # distance = abs((cur_value) - mean_val[key])
+                    #
+                    # if distance <= std_val[key]:
+                    #     labels.append(field_name + '_NORMAL')
+                    # elif std_val[key] < distance <= (2 * std_val[key]):
+                    #     labels.append(field_name + '_BORDERLINE')
+                    # elif (2 * std_val[key]) < distance:
+                    #     labels.append(field_name + '_OUTLIER')
                 else:
                     labels.append('RARE_KEY_FOR_{0}'.format(field_name))
             else:
