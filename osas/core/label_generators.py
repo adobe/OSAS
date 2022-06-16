@@ -325,7 +325,7 @@ class NumericField(LabelGenerator):
             labels.append('{0}_NORMAL'.format(field_name))
         if borderline_threshold < ratio < outlier_threshold:
             labels.append('{0}_BORDERLINE'.format(field_name))
-        elif ratio > outlier_threshold:
+        elif ratio >= outlier_threshold:
             labels.append('{0}_OUTLIER'.format(field_name))
         return labels
 
