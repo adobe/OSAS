@@ -150,17 +150,24 @@ class NumericField(LabelGenerator):
     def __init__(self,
                  field_name: str = '',
                  group_by: str = None,
-                 mode: str = 'stdev',
-                 borderline_threshold: float = 1,
-                 outlier_threshold: float = 2,
+                 stdev: bool = True,
+                 stdev_borderline_threshold: float = 1,
+                 stdev_outlier_threshold: float = 2,
+                 spike: str = 'none',
+                 spike_inverse: bool = False,
+                 spike_borderline_threshold: float = 10,
+                 spike_outlier_threshold: float = 20,
                  label_for_normal: bool = True):
         """
         Constructor
         :param field_name: what field to look for in the data object
         """
 
-        if mode != 'stdev' and mode != 'spike' and mode != 'inverted_spike':
-            print("Unknown mode {0} for NumericField. Expected 'stdev', 'spike' or 'inverted_spike'")
+        if spike not in ('none', 'percent', 'raw'):
+            print("Unknown spike {0} for NumericField. Expected 'none', 'percent', or 'raw'")
+
+        if not stdev and spike == 'none':
+            print("stdev or spike must be activated for NumericField to operate")
 
         self._model = {
             'mean': None,
@@ -168,9 +175,12 @@ class NumericField(LabelGenerator):
             'count': 0,
             'field_name': field_name,
             'group_by': group_by,
-            'mode': mode,
-            'borderline_threshold': borderline_threshold,
-            'outlier_threshold': outlier_threshold,
+            'stdev_borderline_threshold': stdev_borderline_threshold,
+            'stdev_outlier_threshold':stdev_outlier_threshold,
+            'spike': spike,
+            'spike_inverse': spike_inverse,
+            'spike_borderline_threshold': spike_borderline_threshold,
+            'spike_outlier_threshold': spike_outlier_threshold,
             'label_for_normal': label_for_normal
         }
 
@@ -310,24 +320,63 @@ class NumericField(LabelGenerator):
     #
     #     return self._model
 
-    def _get_labels(self, cur_value, mean_val, std_val, mode, label_for_normal, borderline_threshold,
-                    outlier_threshold):
+    def _get_labels(self, cur_value, mean_val, std_val, stdev, stdev_borderline_threshold,
+                    stdev_outlier_threshold, spike, spike_inverse, spike_borderline_threshold,
+                    spike_outlier_threshold, label_for_normal):
         labels = []
-        if mode == 'stdev':
-            ratio = abs(cur_value - mean_val) / std_val
-        elif mode == 'spike':
-            ratio = cur_value / mean_val
-        else:
-            ratio = mean_val / cur_value
+        if stdev:
+            if std_val == 0:
+                std_val = 0.01
+            stdev_ratio = abs(cur_value - mean_val) / std_val
+        
+        if spike == 'percent':
+            if not spike_inverse:
+                if mean_val == 0:
+                    mean_val = 0.01
+                spike_ratio = cur_value / mean_val
+            else:
+                if cur_value == 0:
+                    cur_value = 0.01
+                spike_ratio = mean_val / cur_value
+        elif spike == 'raw':
+            if not spike_inverse:
+                spike_ratio = cur_value - mean_val
+            else:
+                spike_ratio = mean_val - cur_value
+
         field_name = self._model['field_name'].upper()
 
-        if label_for_normal and ratio < borderline_threshold:
-            labels.append('{0}_NORMAL'.format(field_name))
-        if borderline_threshold < ratio < outlier_threshold:
-            labels.append('{0}_BORDERLINE'.format(field_name))
-        elif ratio >= outlier_threshold:
-            labels.append('{0}_OUTLIER'.format(field_name))
+        # only one of stdev or spike is activated
+        if (stdev and spike == 'none') or (not stdev and spike != 'none'):
+            if stdev:
+                ratio = stdev_ratio
+                borderline_threshold = stdev_borderline_threshold
+                outlier_threshold = stdev_outlier_threshold
+            else:
+                ratio = spike_ratio
+                borderline_threshold = spike_borderline_threshold
+                outlier_threshold = spike_outlier_threshold
+
+            if label_for_normal and ratio < borderline_threshold:
+                labels.append('{0}_NORMAL'.format(field_name))
+            elif borderline_threshold < ratio < outlier_threshold:
+                labels.append('{0}_BORDERLINE'.format(field_name))
+            elif ratio >= outlier_threshold:
+                labels.append('{0}_OUTLIER'.format(field_name))
+        # both std and spike are activated. first, has to be outlier of stdev, then calculate spike.
+        else:
+            if stdev_ratio < stdev_outlier_threshold:
+                if label_for_normal:
+                    labels.append('{0}_NORMAL'.format(field_name))
+            else:
+                if label_for_normal and spike_ratio < spike_borderline_threshold:
+                    labels.append('{0}_NORMAL'.format(field_name))
+                elif spike_borderline_threshold < spike_ratio < spike_outlier_threshold:
+                    labels.append('{0}_BORDERLINE'.format(field_name))
+                elif spike_ratio >= spike_outlier_threshold:
+                    labels.append('{0}_OUTLIER'.format(field_name))
         return labels
+
 
     def __call__(self, input_object: dict) -> [str]:
         labels = []
@@ -339,18 +388,34 @@ class NumericField(LabelGenerator):
         if 'label_for_normal' in self._model:
             label_for_normal = self._model['label_for_normal']
 
-        mode = 'stdev'
-        if 'mode' in self._model:
-            mode = self._model['mode']
+        stdev = True
+        if 'stdev' in self._model:
+           stdev = self._model['stdev']
 
-        outlier_threshold = 1
-        if 'outlier_threshold' in self._model:
-            outlier_threshold = self._model['outlier_threshold']
+        stdev_borderline_threshold = 1
+        if 'stdev_borderline_threshold' in self._model:
+            stdev_borderline_threshold = self._model['stdev_borderline_threshold']
 
-        borderline_threshold = True
-        if 'borderline_threshold' in self._model:
-            borderline_threshold = self._model['borderline_threshold']
+        stdev_outlier_threshold = 2
+        if 'stdev_outlier_threshold' in self._model:
+            stdev_outlier_threshold = self._model['stdev_outlier_threshold']
 
+        spike = 'none'
+        if 'spike' in self._model:
+           spike = self._model['spike']
+        
+        spike_inverse = False
+        if 'spike_inverse' in self._model:
+           spike_inverse = self._model['spike_inverse']
+
+        spike_borderline_threshold = 10
+        if 'spike_borderline_threshold' in self._model:
+            spike_borderline_threshold = self._model['spike_borderline_threshold']
+
+        spike_outlier_threshold = 20
+        if 'spike_outlier_threshold' in self._model:
+            spike_outlier_threshold = self._model['spike_outlier_threshold']
+        
         try:
             cur_value = float(input_object[self._model['field_name']])
         except:
@@ -360,10 +425,14 @@ class NumericField(LabelGenerator):
             new_labels = self._get_labels(cur_value,
                                           mean_val,
                                           std_val,
-                                          mode,
-                                          label_for_normal,
-                                          borderline_threshold,
-                                          outlier_threshold)
+                                          stdev,
+                                          stdev_borderline_threshold,
+                                          stdev_outlier_threshold,
+                                          spike,
+                                          spike_inverse,
+                                          spike_borderline_threshold,
+                                          spike_outlier_threshold,
+                                          label_for_normal)
             for label in new_labels:
                 labels.append(label)
             # distance = abs((cur_value) - mean_val)
@@ -381,10 +450,14 @@ class NumericField(LabelGenerator):
                     new_labels = self._get_labels(cur_value,
                                                   mean_val[key],
                                                   std_val[key],
-                                                  mode,
-                                                  label_for_normal,
-                                                  borderline_threshold,
-                                                  outlier_threshold)
+                                                  stdev,
+                                                  stdev_borderline_threshold,
+                                                  stdev_outlier_threshold,
+                                                  spike,
+                                                  spike_inverse,
+                                                  spike_borderline_threshold,
+                                                  spike_outlier_threshold,
+                                                  label_for_normal)
                     for label in new_labels:
                         labels.append(label)
 
