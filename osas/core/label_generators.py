@@ -16,6 +16,7 @@
 # limitations under the License.
 #
 
+from cProfile import label
 import sys
 import pandas as pd
 import numpy as np
@@ -163,8 +164,8 @@ class NumericField(LabelGenerator):
         :param field_name: what field to look for in the data object
         """
 
-        if spike not in ('none', 'percent', 'raw'):
-            print("Unknown spike {0} for NumericField. Expected 'none', 'percent', or 'raw'")
+        if spike not in ('none', 'ratio', 'fixed'):
+            print("Unknown spike {0} for NumericField. Expected 'none', 'ratio', or 'fixed'")
 
         if not stdev and spike == 'none':
             print("stdev or spike must be activated for NumericField to operate")
@@ -328,8 +329,15 @@ class NumericField(LabelGenerator):
             if std_val == 0:
                 std_val = 0.01
             stdev_ratio = abs(cur_value - mean_val) / std_val
+
+        # if using both stdev and spike, calculate a spike from the stdev
+        if stdev and spike != 'none':
+            if not spike_inverse:
+                mean_val = mean_val + std_val
+            else:
+                mean_val = mean_val - std_val
         
-        if spike == 'percent':
+        if spike == 'ratio':
             if not spike_inverse:
                 if mean_val == 0:
                     mean_val = 0.01
@@ -338,7 +346,7 @@ class NumericField(LabelGenerator):
                 if cur_value == 0:
                     cur_value = 0.01
                 spike_ratio = mean_val / cur_value
-        elif spike == 'raw':
+        elif spike == 'fixed':
             if not spike_inverse:
                 spike_ratio = cur_value - mean_val
             else:
@@ -346,35 +354,29 @@ class NumericField(LabelGenerator):
 
         field_name = self._model['field_name'].upper()
 
-        # only one of stdev or spike is activated
-        if (stdev and spike == 'none') or (not stdev and spike != 'none'):
-            if stdev:
+        if stdev and spike != 'none' and stdev_ratio < stdev_outlier_threshold:
+            # if both are activated, and event is within stdev outlier threshold
+            if label_for_normal:
+                labels.append('{0}_NORMAL'.format(field_name))
+        else:
+            if stdev and spike == 'none':
+                # only stdev is activated
                 ratio = stdev_ratio
                 borderline_threshold = stdev_borderline_threshold
                 outlier_threshold = stdev_outlier_threshold
             else:
+                # if only spike is activated or both are activated, use spike ratio
                 ratio = spike_ratio
                 borderline_threshold = spike_borderline_threshold
                 outlier_threshold = spike_outlier_threshold
-
+            
             if label_for_normal and ratio < borderline_threshold:
                 labels.append('{0}_NORMAL'.format(field_name))
             elif borderline_threshold < ratio < outlier_threshold:
                 labels.append('{0}_BORDERLINE'.format(field_name))
             elif ratio >= outlier_threshold:
                 labels.append('{0}_OUTLIER'.format(field_name))
-        # both std and spike are activated. first, has to be outlier of stdev, then calculate spike.
-        else:
-            if stdev_ratio < stdev_outlier_threshold:
-                if label_for_normal:
-                    labels.append('{0}_NORMAL'.format(field_name))
-            else:
-                if label_for_normal and spike_ratio < spike_borderline_threshold:
-                    labels.append('{0}_NORMAL'.format(field_name))
-                elif spike_borderline_threshold < spike_ratio < spike_outlier_threshold:
-                    labels.append('{0}_BORDERLINE'.format(field_name))
-                elif spike_ratio >= spike_outlier_threshold:
-                    labels.append('{0}_OUTLIER'.format(field_name))
+
         return labels
 
 
