@@ -128,7 +128,7 @@ label_for_normal = False
 stdev = True
 stdev_borderline_threshold = 1
 stdev_outlier_threshold = 2
-spike = none # one of 'none', 'percent', or 'fixed'
+spike = none # one of 'none', 'ratio', or 'fixed'
 spike_borderline_threshold = 10
 spike_outlier_threshold = 20
 
