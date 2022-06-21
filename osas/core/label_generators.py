@@ -177,7 +177,7 @@ class NumericField(LabelGenerator):
             'field_name': field_name,
             'group_by': group_by,
             'stdev_borderline_threshold': stdev_borderline_threshold,
-            'stdev_outlier_threshold':stdev_outlier_threshold,
+            'stdev_outlier_threshold': stdev_outlier_threshold,
             'spike': spike,
             'spike_inverse': spike_inverse,
             'spike_borderline_threshold': spike_borderline_threshold,
@@ -283,6 +283,27 @@ class NumericField(LabelGenerator):
         self._model['mean'] = mean
         self._model['std_dev'] = stdev
         self._model['count'] = count
+        # check sanity and warn user
+        font_style = '\033[93m'
+        mean_is_zero = False
+        stdev_is_zero = False
+        if self._model['group_by'] is None:
+            if self._model['mean'] == 0:
+                mean_is_zero = True
+            if self._model['std_dev'] == 0:
+                stdev_is_zero = True
+        else:
+            for key in self._model['mean']:
+                if self._model['mean'][key] == 0:
+                    mean_is_zero = True
+                if self._model['stdev'][key] == 0:
+                    stdev_is_zero = True
+        if mean_is_zero and self._model['stdev'] == False:
+            sys.stdout.write('\t{0}::WARNING:You have a mean of 0. Any deviation will be flagged\n'.format(font_style))
+        if stdev_is_zero and self._model['stdev'] == True:
+            sys.stdout.write(
+                '\t{0}::WARNING:You have a standard deviation of 0. Any deviation will be flagged\n'.format(font_style))
+
         return self._model
 
     # def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
@@ -336,7 +357,7 @@ class NumericField(LabelGenerator):
                 mean_val = mean_val + std_val
             else:
                 mean_val = mean_val - std_val
-        
+
         if spike == 'ratio':
             if not spike_inverse:
                 if mean_val == 0:
@@ -369,7 +390,7 @@ class NumericField(LabelGenerator):
                 ratio = spike_ratio
                 borderline_threshold = spike_borderline_threshold
                 outlier_threshold = spike_outlier_threshold
-            
+
             if label_for_normal and ratio < borderline_threshold:
                 labels.append('{0}_NORMAL'.format(field_name))
             elif borderline_threshold < ratio < outlier_threshold:
@@ -378,7 +399,6 @@ class NumericField(LabelGenerator):
                 labels.append('{0}_OUTLIER'.format(field_name))
 
         return labels
-
 
     def __call__(self, input_object: dict) -> [str]:
         labels = []
@@ -392,7 +412,7 @@ class NumericField(LabelGenerator):
 
         stdev = True
         if 'stdev' in self._model:
-           stdev = self._model['stdev']
+            stdev = self._model['stdev']
 
         stdev_borderline_threshold = 1
         if 'stdev_borderline_threshold' in self._model:
@@ -404,11 +424,11 @@ class NumericField(LabelGenerator):
 
         spike = 'none'
         if 'spike' in self._model:
-           spike = self._model['spike']
-        
+            spike = self._model['spike']
+
         spike_inverse = False
         if 'spike_inverse' in self._model:
-           spike_inverse = self._model['spike_inverse']
+            spike_inverse = self._model['spike_inverse']
 
         spike_borderline_threshold = 10
         if 'spike_borderline_threshold' in self._model:
@@ -417,7 +437,7 @@ class NumericField(LabelGenerator):
         spike_outlier_threshold = 20
         if 'spike_outlier_threshold' in self._model:
             spike_outlier_threshold = self._model['spike_outlier_threshold']
-        
+
         try:
             cur_value = float(input_object[self._model['field_name']])
         except:
