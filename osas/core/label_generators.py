@@ -176,6 +176,7 @@ class NumericField(LabelGenerator):
             'count': 0,
             'field_name': field_name,
             'group_by': group_by,
+            'stdev': stdev,
             'stdev_borderline_threshold': stdev_borderline_threshold,
             'stdev_outlier_threshold':stdev_outlier_threshold,
             'spike': spike,
@@ -392,7 +393,7 @@ class NumericField(LabelGenerator):
 
         stdev = True
         if 'stdev' in self._model:
-           stdev = self._model['stdev']
+           stdev = bool(self._model['stdev'])
 
         stdev_borderline_threshold = 1
         if 'stdev_borderline_threshold' in self._model:
@@ -408,7 +409,7 @@ class NumericField(LabelGenerator):
         
         spike_inverse = False
         if 'spike_inverse' in self._model:
-           spike_inverse = self._model['spike_inverse']
+           spike_inverse = bool(self._model['spike_inverse'])
 
         spike_borderline_threshold = 10
         if 'spike_borderline_threshold' in self._model:
