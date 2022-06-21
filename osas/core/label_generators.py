@@ -297,7 +297,7 @@ class NumericField(LabelGenerator):
             for key in self._model['mean']:
                 if self._model['mean'][key] == 0:
                     mean_is_zero = True
-                if self._model['stdev'][key] == 0:
+                if self._model['std_dev'][key] == 0:
                     stdev_is_zero = True
         if mean_is_zero and self._model['stdev'] == False:
             sys.stdout.write('\t{0}::WARNING:You have a mean of 0. Any deviation will be flagged\n'.format(font_style))
@@ -413,11 +413,7 @@ class NumericField(LabelGenerator):
 
         stdev = True
         if 'stdev' in self._model:
-<<<<<<< HEAD
            stdev = bool(self._model['stdev'])
-=======
-            stdev = self._model['stdev']
->>>>>>> ab4cb391dab3ffc1146632c35eb509f8719a3ba7
 
         stdev_borderline_threshold = 1
         if 'stdev_borderline_threshold' in self._model:
@@ -433,11 +429,7 @@ class NumericField(LabelGenerator):
 
         spike_inverse = False
         if 'spike_inverse' in self._model:
-<<<<<<< HEAD
            spike_inverse = bool(self._model['spike_inverse'])
-=======
-            spike_inverse = self._model['spike_inverse']
->>>>>>> ab4cb391dab3ffc1146632c35eb509f8719a3ba7
 
         spike_borderline_threshold = 10
         if 'spike_borderline_threshold' in self._model:
