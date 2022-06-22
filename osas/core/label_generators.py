@@ -270,7 +270,7 @@ class NumericField(LabelGenerator):
                         new_mean[key] = mean[key]
                         new_stdev[key] = stdev[key]
                         new_count[key] = count[key]
-                # transfer ex-valuez
+                # transfer ex-values
                 for key in ex_mean:
                     if key not in mean:
                         new_mean[key] = ex_mean[key]
