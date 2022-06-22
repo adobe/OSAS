@@ -16,6 +16,7 @@
 # limitations under the License.
 #
 
+from cProfile import label
 import sys
 import pandas as pd
 import numpy as np
@@ -147,18 +148,42 @@ class NumericField(LabelGenerator):
     (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE, 2*sigma<value OUTLIER)
     """
 
-    def __init__(self, field_name: str = '', group_by: str = None):
+    def __init__(self,
+                 field_name: str = '',
+                 group_by: str = None,
+                 stdev: bool = True,
+                 stdev_borderline_threshold: float = 1,
+                 stdev_outlier_threshold: float = 2,
+                 spike: str = 'none',
+                 spike_inverse: bool = False,
+                 spike_borderline_threshold: float = 10,
+                 spike_outlier_threshold: float = 20,
+                 label_for_normal: bool = True):
         """
         Constructor
         :param field_name: what field to look for in the data object
         """
+
+        if spike not in ('none', 'ratio', 'fixed'):
+            print("Unknown spike {0} for NumericField. Expected 'none', 'ratio', or 'fixed'")
+
+        if not stdev and spike == 'none':
+            print("stdev or spike must be activated for NumericField to operate")
 
         self._model = {
             'mean': None,
             'std_dev': None,
             'count': 0,
             'field_name': field_name,
-            'group_by': group_by
+            'group_by': group_by,
+            'stdev': stdev,
+            'stdev_borderline_threshold': stdev_borderline_threshold,
+            'stdev_outlier_threshold': stdev_outlier_threshold,
+            'spike': spike,
+            'spike_inverse': spike_inverse,
+            'spike_borderline_threshold': spike_borderline_threshold,
+            'spike_outlier_threshold': spike_outlier_threshold,
+            'label_for_normal': label_for_normal
         }
 
     def _get_group_by_value(self, item, group_by):
@@ -245,7 +270,7 @@ class NumericField(LabelGenerator):
                         new_mean[key] = mean[key]
                         new_stdev[key] = stdev[key]
                         new_count[key] = count[key]
-                # transfer ex-valuez
+                # transfer ex-values
                 for key in ex_mean:
                     if key not in mean:
                         new_mean[key] = ex_mean[key]
@@ -259,6 +284,27 @@ class NumericField(LabelGenerator):
         self._model['mean'] = mean
         self._model['std_dev'] = stdev
         self._model['count'] = count
+        # check sanity and warn user
+        font_style = '\033[93m'
+        mean_is_zero = False
+        stdev_is_zero = False
+        if self._model['group_by'] is None:
+            if self._model['mean'] == 0:
+                mean_is_zero = True
+            if self._model['std_dev'] == 0:
+                stdev_is_zero = True
+        else:
+            for key in self._model['mean']:
+                if self._model['mean'][key] == 0:
+                    mean_is_zero = True
+                if self._model['std_dev'][key] == 0:
+                    stdev_is_zero = True
+        if mean_is_zero and self._model['stdev'] == False:
+            sys.stdout.write('\t{0}::WARNING:You have a mean of 0. Any deviation will be flagged\n'.format(font_style))
+        if stdev_is_zero and self._model['stdev'] == True:
+            sys.stdout.write(
+                '\t{0}::WARNING:You have a standard deviation of 0. Any deviation will be flagged\n'.format(font_style))
+
         return self._model
 
     # def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
@@ -297,38 +343,155 @@ class NumericField(LabelGenerator):
     #
     #     return self._model
 
+    def _get_labels(self, cur_value, mean_val, std_val, stdev, stdev_borderline_threshold,
+                    stdev_outlier_threshold, spike, spike_inverse, spike_borderline_threshold,
+                    spike_outlier_threshold, label_for_normal):
+        labels = []
+        if stdev:
+            if std_val == 0:
+                std_val = 0.01
+            stdev_ratio = abs(cur_value - mean_val) / std_val
+
+        # if using both stdev and spike, calculate a spike from the stdev
+        if stdev and spike != 'none':
+            if not spike_inverse:
+                mean_val = mean_val + std_val
+            else:
+                mean_val = mean_val - std_val
+
+        if spike == 'ratio':
+            if not spike_inverse:
+                if mean_val == 0:
+                    mean_val = 0.01
+                spike_ratio = cur_value / mean_val
+            else:
+                if cur_value == 0:
+                    cur_value = 0.01
+                spike_ratio = mean_val / cur_value
+        elif spike == 'fixed':
+            if not spike_inverse:
+                spike_ratio = cur_value - mean_val
+            else:
+                spike_ratio = mean_val - cur_value
+
+        field_name = self._model['field_name'].upper()
+
+        if stdev and spike != 'none' and stdev_ratio < stdev_outlier_threshold:
+            # if both are activated, and event is within stdev outlier threshold
+            if label_for_normal:
+                labels.append('{0}_NORMAL'.format(field_name))
+        else:
+            if stdev and spike == 'none':
+                # only stdev is activated
+                ratio = stdev_ratio
+                borderline_threshold = stdev_borderline_threshold
+                outlier_threshold = stdev_outlier_threshold
+            else:
+                # if only spike is activated or both are activated, use spike ratio
+                ratio = spike_ratio
+                borderline_threshold = spike_borderline_threshold
+                outlier_threshold = spike_outlier_threshold
+
+            if label_for_normal and ratio < borderline_threshold:
+                labels.append('{0}_NORMAL'.format(field_name))
+            elif borderline_threshold < ratio < outlier_threshold:
+                labels.append('{0}_BORDERLINE'.format(field_name))
+            elif ratio >= outlier_threshold:
+                labels.append('{0}_OUTLIER'.format(field_name))
+
+        return labels
+
     def __call__(self, input_object: dict) -> [str]:
         labels = []
         mean_val = self._model['mean']
         std_val = self._model['std_dev']
         count_val = self._model['count']
         field_name = self._model['field_name'].upper()
+        label_for_normal = True
+        if 'label_for_normal' in self._model:
+            label_for_normal = self._model['label_for_normal']
+
+        stdev = True
+        if 'stdev' in self._model:
+           stdev = bool(self._model['stdev'])
+
+        stdev_borderline_threshold = 1
+        if 'stdev_borderline_threshold' in self._model:
+            stdev_borderline_threshold = self._model['stdev_borderline_threshold']
+
+        stdev_outlier_threshold = 2
+        if 'stdev_outlier_threshold' in self._model:
+            stdev_outlier_threshold = self._model['stdev_outlier_threshold']
+
+        spike = 'none'
+        if 'spike' in self._model:
+            spike = self._model['spike']
+
+        spike_inverse = False
+        if 'spike_inverse' in self._model:
+           spike_inverse = bool(self._model['spike_inverse'])
+
+        spike_borderline_threshold = 10
+        if 'spike_borderline_threshold' in self._model:
+            spike_borderline_threshold = self._model['spike_borderline_threshold']
+
+        spike_outlier_threshold = 20
+        if 'spike_outlier_threshold' in self._model:
+            spike_outlier_threshold = self._model['spike_outlier_threshold']
+
         try:
             cur_value = float(input_object[self._model['field_name']])
         except:
             return ['{0}_BAD_VALUE'.format(field_name)]
         group_by = self._model['group_by']
         if group_by is None:
-            distance = abs((cur_value) - mean_val)
-            if distance <= std_val:
-                labels.append(field_name + '_NORMAL')
-            elif std_val < distance <= (2 * std_val):
-                labels.append(field_name + '_BORDERLINE')
-            elif (2 * std_val) < distance:
-                labels.append(field_name + '_OUTLIER')
+            new_labels = self._get_labels(cur_value,
+                                          mean_val,
+                                          std_val,
+                                          stdev,
+                                          stdev_borderline_threshold,
+                                          stdev_outlier_threshold,
+                                          spike,
+                                          spike_inverse,
+                                          spike_borderline_threshold,
+                                          spike_outlier_threshold,
+                                          label_for_normal)
+            for label in new_labels:
+                labels.append(label)
+            # distance = abs((cur_value) - mean_val)
+            # if label_for_normal and distance <= std_val:
+            #     labels.append(field_name + '_NORMAL')
+            # elif std_val < distance <= (2 * std_val):
+            #     labels.append(field_name + '_BORDERLINE')
+            # elif (2 * std_val) < distance:
+            #     labels.append(field_name + '_OUTLIER')
         else:
             key = self._get_group_by_value(input_object, group_by)
             if key in mean_val:
                 count = count_val[key]
                 if count > 5:
-                    distance = abs((cur_value) - mean_val[key])
+                    new_labels = self._get_labels(cur_value,
+                                                  mean_val[key],
+                                                  std_val[key],
+                                                  stdev,
+                                                  stdev_borderline_threshold,
+                                                  stdev_outlier_threshold,
+                                                  spike,
+                                                  spike_inverse,
+                                                  spike_borderline_threshold,
+                                                  spike_outlier_threshold,
+                                                  label_for_normal)
+                    for label in new_labels:
+                        labels.append(label)
 
-                    if distance <= std_val[key]:
-                        labels.append(field_name + '_NORMAL')
-                    elif std_val[key] < distance <= (2 * std_val[key]):
-                        labels.append(field_name + '_BORDERLINE')
-                    elif (2 * std_val[key]) < distance:
-                        labels.append(field_name + '_OUTLIER')
+                    # distance = abs((cur_value) - mean_val[key])
+                    #
+                    # if distance <= std_val[key]:
+                    #     labels.append(field_name + '_NORMAL')
+                    # elif std_val[key] < distance <= (2 * std_val[key]):
+                    #     labels.append(field_name + '_BORDERLINE')
+                    # elif (2 * std_val[key]) < distance:
+                    #     labels.append(field_name + '_OUTLIER')
                 else:
                     labels.append('RARE_KEY_FOR_{0}'.format(field_name))
             else:

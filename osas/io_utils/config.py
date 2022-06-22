@@ -97,6 +97,10 @@ class ObfuscationField(Config):
 class NumericField(Config):
     field_name: str = field(default='count')
     group_by: str = field(default=None)
+    mode: str = field(default='stdev')
+    borderline_threshold: float = field(default=1)
+    outlier_threshold: float = field(default=2)
+    label_for_normal: bool = field(default=True)
 
 
 @dataclass

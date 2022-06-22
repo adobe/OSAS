@@ -7,13 +7,23 @@ There are two main component classes: LabelGenerator and ScoringAlgorithm.
 
 **NumericField**
 
-* This type of LabelGenerator handles numerical fields. It computes the mean and standard deviation and generates labels according to
-    the distance between the current value and the mean value (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE,
-    2*sigma<value OUTLIER)
+* This type of LabelGenerator handles numerical fields. It can compute in two different ways: (1) the mean and standard deviation and generates labels
+    according to the distance between the current value and the mean value (value<=sigma NORMAL, sigma<value<=2*sigma BORDERLINE,
+    2*sigma<value OUTLIER) and (2) a spike, which can be either a percentage or fixed amount increase/decrease from the mean and generates labels
+    if the event is above/below the spike amount. The numeric field must use either one or both of these calculations to generate labels. If both
+    stdev and spike are used, it will only generate labels if an event is a spike from the stdev and not from the mean.
 
 Params:
 * ***field_name***: what field to look for in the data object
 * ***group_by***: when this field is set (not None), statistics are built around the groups obtained using the values of the specified attribute names. For instance, you can use this to compute CPU usage anomalies based on the `station_name` or `cloud_account_id`
+* ***label_for_normal***: True/False - when set, it will output labels for normal events. Default `True`
+* ***stdev***: True/False - when set, it will use stdev as a calculation method. Default `True`.
+* ***stdev_borderline_threshold***: How many standard deviations for an event to be considered borderline. Default `1`.
+* ***stdev_outlier_threshold***: How many standard deviations for an event to be considered an outlier. Default `2`.
+* ***spike***: none/ratio/fixed - when set (not none), will use ratio or fixed spike calculation. Default `none`.
+* ***spike_inverse***: True/False - when set, will caculate spike as a large decrease from the mean. Default `False`.
+* ***spike_borderline_threshold***: How much ratio/fixed amount for an event to be considered borderline. If ratio, a value of 2 is 2x above the mean. If fixed, a value of 10 is 10 above the mean. Default `10`.
+* ***spike_outlier_threshold***: How much ratio/fixed amount for an event to be considered an outlier. Default `20`.
 
 **TextField**
 
