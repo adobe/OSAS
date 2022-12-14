@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling", "hatch-requirements-txt"]
+build-backend = "hatchling.build"
+
+[project]
+name = "osas"
+version = "0.0.1"
+authors = [
+  { name="Tiberiu Boros", email="boros@adobe.com" },
+  { name="Wilson Tang", email="lotang@adobe.com" },
+]
+description = "Open Stop Anomaly Shop"
+readme = "README.md"
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies"]
+
+[tool.hatch.metadata.hooks.requirements_txt]
+files = ["requirements.txt"]
+
+[project.urls]
+"Homepage" = "https://github.com/adobe/OSAS/"
+"Bug Tracker" = "https://github.com/adobe/OSAS/issues"
