@@ -158,11 +158,11 @@ class LabelGenerator:
         pass
 
     @abstractmethod
-    def __call__(self, input_object: dict) -> [str]:
+    def __call__(self, input_object: dict) -> ([str], str):
         """
         Generate specific labels for the dataset entry
         :param input_object: an entry in the dataset
-        :return: list of labels generated for this input object
+        :return: Tupe: list of labels generated for this input object and the narrative string
         """
         pass
 

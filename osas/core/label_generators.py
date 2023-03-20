@@ -78,7 +78,7 @@ class ObfuscationField(LabelGenerator):
         lg._classifier = od.ObfuscationClassifier(platform=platform, gpu=bool(lg._model['gpu']))
         return lg
 
-    def __call__(self, object: dict) -> [str]:
+    def __call__(self, object: dict) -> ([str], str):
         command = object[self._model['field_name']]
         classification = self._classifier([command])[0]
         if classification == 1:
@@ -131,7 +131,7 @@ class LOLField(LabelGenerator):
         lg._classifier = LOLC(platform=platform)
         return lg
 
-    def __call__(self, object: dict):
+    def __call__(self, object: dict)-> ([str], str):
         command = object[self._model['field_name']]
         status, labels = self._classifier(command)
         ret_labels = [status]
@@ -401,7 +401,7 @@ class NumericField(LabelGenerator):
 
         return labels
 
-    def __call__(self, input_object: dict) -> [str]:
+    def __call__(self, input_object: dict) -> ([str], str):
         labels = []
         mean_val = self._model['mean']
         std_val = self._model['std_dev']
@@ -598,7 +598,7 @@ class TextField(LabelGenerator):
                 total += -math.log(1e-8)  # small prob for unseen events
         return total / len(ngrams)
 
-    def __call__(self, input_object: dict) -> [str]:
+    def __call__(self, input_object: dict) -> ([str], str):
         perplexity = self._compute_perplexity(input_object[self._field_name])
         if perplexity - self._mean_perplex < 2 * self._std_perplex:
             return [perplexity * 10]
@@ -665,7 +665,7 @@ class MultinomialField(LabelGenerator):
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return self._mfc.build_model(dataset, count_column=count_column)
 
-    def __call__(self, item: dict) -> [str]:
+    def __call__(self, item: dict) -> ([str], str):
         lbls = self._mfc(item)
         lbls = [l.replace('_PAIR', '') for l in lbls]
         return lbls
@@ -742,7 +742,7 @@ class MultinomialFieldCombiner(LabelGenerator):
 
         return self._model
 
-    def __call__(self, item: dict) -> [str]:
+    def __call__(self, item: dict) -> ([str], str):
         fname = ('_'.join(self._model['field_names'])).upper() + '_PAIR'
         gname = ''
         if self._model['group_by'] is not None:
@@ -797,7 +797,7 @@ class NumericalFieldCombiner(LabelGenerator):
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pass
 
-    def __call__(self, input_object: dict) -> [str]:
+    def __call__(self, input_object: dict) -> ([str], str):
         pass
 
     @staticmethod
@@ -813,7 +813,7 @@ class KeywordBased(LabelGenerator):
         self._label_list = [item for item in keyword_list]
         self._field_name = field_name
 
-    def __call__(self, input_object: dict):
+    def __call__(self, input_object: dict)->([str], str):
         label_list = []
         text = str(input_object[self._field_name])
         text = re.sub('[^0-9a-zA-Z]+', ' ', text)
@@ -846,7 +846,7 @@ class KnowledgeBased(LabelGenerator):
         self._label_list = [item[1] for item in rules_and_labels_tuple_list]
         self._field_name = field_name
 
-    def __call__(self, input_object: dict) -> [str]:
+    def __call__(self, input_object: dict) -> ([str], str):
         label_list = []
         text = str(input_object[self._field_name])
         for ii in range(len(self._label_list)):
