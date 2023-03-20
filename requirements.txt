@@ -8,5 +8,4 @@ tqdm>=4.60.0
 obfuscation-detection>=0.7.1
 tqdmx
 pyyaml
-
 lolc

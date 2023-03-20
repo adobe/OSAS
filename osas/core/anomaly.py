@@ -69,7 +69,7 @@ class IFAnomaly(AnomalyDetection):
         model = {'model': out_model}
         return model
 
-    def __call__(self, dataset: Datasource) -> [float]:
+    def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
         labels = []
         for item in dataset:
@@ -129,7 +129,7 @@ class LOFAnomaly(AnomalyDetection):
         model = {'model': out_model}
         return model
 
-    def __call__(self, dataset: Datasource) -> [float]:
+    def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
         labels = []
         for item in dataset:
@@ -195,7 +195,7 @@ class SVDAnomaly(AnomalyDetection):
         model = {'model': out_model}
         return model
 
-    def __call__(self, dataset: Datasource) -> [float]:
+    def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
         labels = []
         for item in dataset:
@@ -297,7 +297,7 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         model = {'model': out_model}
         return model
 
-    def __call__(self, dataset: Datasource) -> [float]:
+    def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
         def _build_feats(tags):
             feats = []
@@ -349,7 +349,11 @@ class StatisticalNGramAnomaly(AnomalyDetection):
             return score + perp_score
 
         scores = []
-        for item in tqdm.tqdm(dataset, ncols=100, desc="\tscoring data"):
+        if verbose:
+            pgb = tqdm.tqdm(dataset, ncols=100, desc="\tscoring data")
+        else:
+            pgb = dataset
+        for item in pgb:
             scores.append(_compute_score(self._model, item['_labels']))
 
         return scores
@@ -444,7 +448,7 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         model = {'model': out_model}
         return model
 
-    def __call__(self, dataset: Datasource) -> [float]:
+    def __call__(self, dataset: Datasource, verbose=True) -> [float]:
         labels = []
         for item in dataset:
             labels.append(item['_labels'])

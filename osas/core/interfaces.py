@@ -200,7 +200,7 @@ class AnomalyDetection:
         pass
 
     @abstractmethod
-    def __call__(self, dataset: Datasource) -> [float]:
+    def __call__(self, dataset: Datasource, verbose=True) -> [float]:
         """
         Scores a dataset with anomaly scores
         :param dataset: the dataset to score
