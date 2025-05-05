@@ -7,9 +7,9 @@ import time
 
 sys.path.append('')
 
-from osas.pipeline.pipeline import Pipeline
-from osas.pipeline.detect_anomalies import DetectAnomalies
-from osas.pipeline.groom_data import GroomData
+from src.osas.pipeline import Pipeline
+from src.osas.pipeline import DetectAnomalies
+from src.osas.pipeline import GroomData
 
 
 class OSASConfig:

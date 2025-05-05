@@ -23,7 +23,7 @@ from elasticsearch import helpers, Elasticsearch
 
 sys.path.append('')
 
-from osas.pipeline.pipeline import Pipeline
+from src.osas.pipeline import Pipeline
 from osas.data.datasources import CSVDataSource, Datasource
 import numpy as np
 

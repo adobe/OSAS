@@ -11,7 +11,7 @@
     <p>{{files[i]}}</p>
     {%endfor%}
      <h1>Please input a valid dataset from the list above</h1>
-    <form method="POST" action = "/osas/generate_config">
+    <form method="POST" action = "/src/osas/run_full_process">
       <div class = "form-group">
         <label for="fname"><b>Input Dataset</b></label>
         <select name="input" id="input">
@@ -20,8 +20,8 @@
           {% endfor %}
         </select>
         <br><br>
-        <label for="fname"><b>Output config file</b></label>
-        <input type="text" name = "output"><b>.conf</b><br><br>
+        <label for="fname"><b>Output file</b></label>
+        <input type="text" name = "output"><b>.csv</b><br><br>
       </div>
       <input class="btn btn-primary" type="submit" value="submit">
     </form>
