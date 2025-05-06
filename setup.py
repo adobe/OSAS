@@ -12,23 +12,31 @@ def parse_requirements(filename):
 
 setuptools.setup(
     name="osas",
-    version="0.0.1",
+    version="0.9.1",
     author="Multiple Authors",
-    author_email="scc-threatintel@adobe.com",
+    author_email="boros@adobe.com",
     description="One Stop Anomaly Shop",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/adobe/OSAS/",
     project_urls={
+        "Source Code": "https://github.com/adobe/OSAS/",
         "Bug Tracker": "https://github.com/adobe/OSAS/issues",
+        "Documentation": "https://github.com/adobe/OSAS/docs/"
     },
     classifiers=[
         "Programming Language :: Python :: 3.0",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    packages=setuptools.find_packages(),
-    python_requires=">=3.6",
+    packages=setuptools.find_packages("src"),
+    python_requires=">=3.12",
     include_package_data=True,
-    install_requires=parse_requirements("requirements.txt")
+    install_requires=parse_requirements("requirements.txt"),
+    package_dir={"": "src"},
+    entry_points = {
+        "console_scripts": [
+            "osas = osas.cli:main"
+        ]
+    }
 )

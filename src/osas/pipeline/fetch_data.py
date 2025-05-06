@@ -21,7 +21,7 @@ import sys
 
 sys.path.append('')
 
-from osas.pipeline.pipeline import Pipeline
+from src.osas.pipeline import Pipeline
 from osas.data import datasources
 from osas.core.interfaces import Datasource
 from osas.io_utils import config

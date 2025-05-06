@@ -12,17 +12,15 @@
 
   <p>{{dataset[i]}}</p>
   {%endfor%}
+
     <h1>Available config in tests folder:</h1>
     {%for i in range(0, len)%}
+
     <p>{{files[i]}}</p>
     {%endfor%}
-  <h1>Available pipelines in tests folder:</h1>
-  {%for i in range(0, len_pipeline)%}
 
-  <p>{{pipeline[i]}}</p>
-  {%endfor%}
      <h1>Please input a valid config file from the list above</h1>
-    <form method="POST" action = "/osas/run_pipeline">
+    <form method="POST" action = "/src/osas/train_pipeline">
       <div class = "form-group">
         <label for="fname"><b>Input Dataset</b></label>
         <select name="input" id="input">
@@ -40,17 +38,8 @@
         </select>
         <br><br>
 
-
-        <label for="fname"><b>Input pipeline model file</b></label>
-        <select name="model_conf" id="model_conf">
-          {% for item in pipeline %}
-          <option value="{{ item }}">{{item}}</option>
-          {% endfor %}
-        </select>
-        <br><br>
-
-        <label for="fname"><b>Anomaly Scoring results</b></label>
-        <input type="text" name = "output"><b>.csv</b><br><br>
+        <label for="fname"><b>Output pipeline model</b></label>
+        <input type="text" name = "output" value="file_name"><b>.model</b><br><br>
       </div>
       <input class="btn btn-primary" type="submit" value="submit">
     </form>
