@@ -22,9 +22,9 @@ import sys
 from ast import literal_eval
 
 sys.path.append('')
-from src.osas.pipeline import GroomData
+from osas.pipeline.groom_data import GroomData
 from osas.data.datasources import CSVDataSource, Datasource
-from src.osas.pipeline import DetectAnomalies
+from osas.pipeline.detect_anomalies import DetectAnomalies
 import json
 
 

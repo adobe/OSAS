@@ -29,16 +29,17 @@ from osas.core.interfaces import LabelGenerator, Datasource
 from osas.core.utils import Tokenizer
 from enum import Enum
 
-from lol.api import LOLC
-from lol.api import PlatformType
 
-import obfuscation_detection as od
+# from lol.api import LOLC
+# from lol.api import PlatformType
+
+# import obfuscation_detection as od
 
 
 class ObfuscationFieldPlatform(Enum):
-    LINUX = od.PlatformType.LINUX
-    WINDOWS = od.PlatformType.WINDOWS
-    ALL = od.PlatformType.ALL
+    LINUX = 1  # od.PlatformType.LINUX
+    WINDOWS = 2  # od.PlatformType.WINDOWS
+    ALL = 3  # od.PlatformType.ALL
 
 
 class ObfuscationField(LabelGenerator):
@@ -50,11 +51,11 @@ class ObfuscationField(LabelGenerator):
     def __init__(self, field_name: str = '', platform: ObfuscationFieldPlatform = ObfuscationFieldPlatform.ALL,
                  gpu: bool = False):
         if platform == ObfuscationFieldPlatform.LINUX:
-            platform = od.PlatformType.LINUX
+            platform = 1#od.PlatformType.LINUX
         elif platform == ObfuscationFieldPlatform.WINDOWS:
-            platform = od.PlatformType.WINDOWS
+            platform = 2#od.PlatformType.WINDOWS
         else:
-            platform = od.PlatformType.ALL
+            platform = 3#od.PlatformType.ALL
         platform_str = str(platform)
         self._model = {
             'field_name': field_name,
@@ -89,8 +90,8 @@ class ObfuscationField(LabelGenerator):
 
 
 class LOLFieldPlatform(Enum):
-    LINUX = PlatformType.LINUX
-    WINDOWS = PlatformType.WINDOWS
+    LINUX = 1#PlatformType.LINUX
+    WINDOWS = 2#PlatformType.WINDOWS
 
 
 class LOLField(LabelGenerator):
@@ -413,7 +414,7 @@ class NumericField(LabelGenerator):
 
         stdev = True
         if 'stdev' in self._model:
-           stdev = bool(self._model['stdev'])
+            stdev = bool(self._model['stdev'])
 
         stdev_borderline_threshold = 1
         if 'stdev_borderline_threshold' in self._model:
@@ -429,7 +430,7 @@ class NumericField(LabelGenerator):
 
         spike_inverse = False
         if 'spike_inverse' in self._model:
-           spike_inverse = bool(self._model['spike_inverse'])
+            spike_inverse = bool(self._model['spike_inverse'])
 
         spike_borderline_threshold = 10
         if 'spike_borderline_threshold' in self._model:
