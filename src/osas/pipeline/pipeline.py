@@ -152,14 +152,16 @@ class Pipeline:
         return final_model
 
     def __call__(self, dataset: Datasource, dest_field_labels='labels', dest_field_score='score'):
-        all_labels = []
-        for item in dataset:
+
+        def process_item(item):
             label_list = []
             for lg in self._pipeline:
                 llist = lg(item)
                 for label in llist:
                     label_list.append(label)
-            all_labels.append(label_list)
+            return label_list
+
+        all_labels = dataset.apply(process_item, axis=1)
         dataset[dest_field_labels] = all_labels
         dataset['_labels'] = all_labels
         if self._detect_anomalies is not None:
