@@ -28,6 +28,8 @@ import json
 from osas.core.interfaces import LabelGenerator, Datasource
 from osas.core.utils import Tokenizer
 from enum import Enum
+from typing import Any, Dict, Iterable, Optional, Tuple
+from collections import Counter, defaultdict
 
 
 # from lol.api import LOLC
@@ -51,11 +53,11 @@ class ObfuscationField(LabelGenerator):
     def __init__(self, field_name: str = '', platform: ObfuscationFieldPlatform = ObfuscationFieldPlatform.ALL,
                  gpu: bool = False):
         if platform == ObfuscationFieldPlatform.LINUX:
-            platform = 1#od.PlatformType.LINUX
+            platform = 1  # od.PlatformType.LINUX
         elif platform == ObfuscationFieldPlatform.WINDOWS:
-            platform = 2#od.PlatformType.WINDOWS
+            platform = 2  # od.PlatformType.WINDOWS
         else:
-            platform = 3#od.PlatformType.ALL
+            platform = 3  # od.PlatformType.ALL
         platform_str = str(platform)
         self._model = {
             'field_name': field_name,
@@ -90,8 +92,8 @@ class ObfuscationField(LabelGenerator):
 
 
 class LOLFieldPlatform(Enum):
-    LINUX = 1#PlatformType.LINUX
-    WINDOWS = 2#PlatformType.WINDOWS
+    LINUX = 1  # PlatformType.LINUX
+    WINDOWS = 2  # PlatformType.WINDOWS
 
 
 class LOLField(LabelGenerator):
@@ -202,53 +204,21 @@ class NumericField(LabelGenerator):
             incremental = True
         group_by = self._model['group_by']
         if group_by is None:
-            mean = 0
-            stdev = 0
-            count = 0
-        else:
-            mean = {}
-            stdev = {}
-            count = {}
-        # mean
-        for item in dataset:
-            cc = 1
-            if count_column is not None:
-                cc = int(item[count_column])
-            if group_by is None:
-                mean += item[self._model['field_name']] * cc
-                count += cc
-            else:
-                key = self._get_group_by_value(item, group_by)
-                if key not in mean:
-                    mean[key] = 0
-                    stdev[key] = 0
-                    count[key] = 0
-                mean[key] += item[self._model['field_name']] * cc
-                count[key] += cc
+            mean = dataset[self._model['field_name']].mean()
+            stdev = dataset[self._model['field_name']].std()
 
-        if group_by is None:
-            mean /= count
-        else:
-            for key in mean:
-                mean[key] /= count[key]
-        # stdev
-        for item in dataset:
-            cc = 1
-            if count_column is not None:
-                cc = int(item[count_column])
-            if group_by is None:
-                stdev += ((item[self._model['field_name']] - mean) ** 2) * cc
+            if count_column is None:
+                count = len(dataset[self._model['field_name']])
             else:
-                key = self._get_group_by_value(item, group_by)
-                stdev[key] += ((item[self._model['field_name']] - mean[key]) ** 2) * cc
-
-        if group_by is None:
-            stdev /= count
-            stdev = math.sqrt(stdev)
+                count = dataset[count_column].sum()
         else:
-            for key in stdev:
-                stdev[key] /= count[key]
-                stdev[key] = math.sqrt(stdev[key])
+            mean = dataset.groupby(group_by, {self._model['field_name']: 'mean'})
+            stdev = dataset.groupby(group_by, {self._model['field_name']: 'std'})
+
+            if count_column is None:
+                count = dataset.groupby(group_by, {self._model['field_name']: 'count'})
+            else:
+                count = dataset.groupby(group_by, {count_column: 'sum'})
 
         # update if incremental
         if incremental:
@@ -531,51 +501,64 @@ class TextField(LabelGenerator):
         self._std_perplex = 0
         self._accepted_unigrams = {}
 
-    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
-        unigram2count = {}
-        for item in dataset:
-            text = item[self._field_name]
-            unigrams = self._get_ngrams(text, unigrams_only=True)
-            occ_number = 1
-            if count_column is not None:
-                occ_number = item[count_column]
-            for unigram in unigrams:
-                if unigram not in unigram2count:
-                    unigram2count[unigram] = occ_number
-                else:
-                    unigram2count[unigram] += occ_number
-        for unigram in unigram2count:
-            if unigram2count[unigram] > 2:
-                self._accepted_unigrams[unigram] = 1
+    def build_ngram2count(self, dataset: Datasource, count_column: str = None, unigrams_only=False) -> tuple[dict, int]:
+        ngram2count = {}
+        total_inf = 0
 
-        for item in dataset:
+        def build_ngram2count_func(item):
+            local_ngram2count = {}
             text = item[self._field_name]
-            ngrams = self._get_ngrams(text)
+            local_total_inf = 0
+            ngrams = self._get_ngrams(text, unigrams_only=unigrams_only)
             occ_number = 1
             if count_column is not None:
                 occ_number = item[count_column]
             for ngram in ngrams:
                 if len(ngram) == self._ngram_range[0]:
-                    self._total_inf += occ_number
-                if ngram in self._model:
-                    self._model[ngram] += occ_number
+                    local_total_inf += occ_number
+                if ngram not in local_ngram2count:
+                    local_ngram2count[ngram] = occ_number
                 else:
-                    self._model[ngram] = occ_number
-        # for ngram in self._model:
-        #     self._model[ngram] =
+                    local_ngram2count[ngram] += occ_number
+            return local_ngram2count, local_total_inf
+
+        results = dataset.apply(build_ngram2count_func, axis=1)
+        for item in results:
+            for ngram in item[0]:
+                if ngram not in ngram2count:
+                    ngram2count[ngram] = item[0][ngram]
+                else:
+                    ngram2count[ngram] += item[0][ngram]
+            total_inf += item[1]
+
+        return ngram2count, total_inf
+
+    def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
+        unigram2count, _ = self.build_ngram2count(dataset, count_column, unigrams_only=True)
+        for unigram in unigram2count:
+            if unigram2count[unigram] > 2:
+                self._accepted_unigrams[unigram] = 1
+
+        ngram2count, total_inf = self.build_ngram2count(dataset, count_column, unigrams_only=False)
+        self._total_inf = total_inf
+        self._model = ngram2count
+
         ser_model = [self._field_name, self._lm_mode, self._ngram_range[0], self._ngram_range[1], self._mean_perplex,
                      self._std_perplex, self._total_inf]
 
-        all_perplex = np.zeros((len(dataset)), dtype=np.float)
-        for ii in range(len(dataset)):
+        def compute_perplexity_func(item):
             text = item[self._field_name]
-            all_perplex[ii] = self._compute_perplexity(text)
+            perplexity = self._compute_perplexity(text)
+            return perplexity
+
+        all_perplex = dataset.apply(compute_perplexity_func, axis=1)
 
         self._mean_perplex = np.mean(all_perplex)
         self._std_perplex = np.std(all_perplex)
         ser_model[4] = self._mean_perplex
         ser_model[5] = self._std_perplex
         ser_model.append(self._accepted_unigrams)
+
         for item in self._model:
             ser_model.append(item)
             ser_model.append(self._model[item])
@@ -590,11 +573,6 @@ class TextField(LabelGenerator):
             if ngram in self._model:
                 sup_count = math.log(self._model[ngram]) + 1
                 total += 1 / sup_count
-                # if ngram[:-1] in self._model:
-                #     inf_count = self._model[ngram[:-1]]
-                # else:
-                #     inf_count = self._total_inf
-                # total += math.log(sup_count / inf_count)
             else:
                 total += -math.log(1e-8)  # small prob for unseen events
         return total / len(ngrams)
@@ -703,28 +681,76 @@ class MultinomialFieldCombiner(LabelGenerator):
         else:
             return "({0})".format(','.join([str(item[k]) for k in group_by]))
 
+    def _reduce_results(
+            self,
+            results: Iterable[Tuple[Optional[str], str, int]]
+    ) -> Tuple[int, Counter, Dict[str, Counter], Counter]:
+        """
+        Aggregate map results into:
+         - total occurrences,
+         - a global (no-group) Counter,
+         - a dict of group Counters,
+         - a Counter of group totals
+        """
+        total = 0
+        global_counter = Counter()
+        group_counters: Dict[str, Counter] = defaultdict(Counter)
+        group_totals = Counter()
+
+        for gbv, combined, occ in results:
+            total += occ
+            if gbv is None:
+                global_counter[combined] += occ
+            else:
+                group_counters[gbv][combined] += occ
+                group_totals[gbv] += occ
+
+        return total, global_counter, group_counters, group_totals
+
+    def _merge_counts(
+            self,
+            total: int,
+            global_counter: Counter,
+            group_counters: Dict[str, Counter],
+            group_totals: Counter,
+            group_by_field: Optional[Any]
+    ) -> None:
+        """
+        Merge aggregated counts back into self._model['pair2count'] and update grand total.
+        """
+        pair2count = self._model.setdefault('pair2count', {})
+
+        if group_by_field is None:
+            for k, v in global_counter.items():
+                pair2count[k] = pair2count.get(k, 0) + v
+            pair2count['TOTAL'] = pair2count.get('TOTAL', 0) + total
+        else:
+            for gbv, counter in group_counters.items():
+                grp = pair2count.setdefault(gbv, {})
+                for k, v in counter.items():
+                    grp[k] = grp.get(k, 0) + v
+                grp['TOTAL'] = grp.get('TOTAL', 0) + group_totals[gbv]
+
+        self._model['grand_total'] = self._model.get('grand_total', 0) + total
+
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pair2count = self._model['pair2count']  # this is used for incremental updates
         group_by_field = self._model['group_by']
-        total = 0
-        for item in dataset:
-            if group_by_field is not None:
-                gbv = self._get_group_by_value(item, group_by_field)  # str(item[group_by_field])
-                if gbv not in self._model['pair2count']:
-                    self._model['pair2count'][gbv] = {'TOTAL': 0}
-                pair2count = self._model['pair2count'][gbv]
-            combined = [str(item[field]) for field in self._model['field_names']]
-            combined = '(' + ','.join(combined) + ')'
-            occ_number = 1
-            if count_column is not None:
-                occ_number = int(item[count_column])
-            total += occ_number
-            if group_by_field is not None:
-                self._model['pair2count'][gbv]['TOTAL'] += occ_number
-            if combined not in pair2count:
-                pair2count[combined] = occ_number
-            else:
-                pair2count[combined] += occ_number
+        field_names = self._model.get('field_names', [])
+
+        def build_pair2count(item):
+            gbv = (
+                self._get_group_by_value(item, group_by_field)
+                if group_by_field is not None
+                else None
+            )
+            combined = "(" + ",".join(str(item[f]) for f in field_names) + ")"
+            occ = int(item[count_column]) if count_column is not None else 1
+            return gbv, combined, occ
+
+        results = dataset.apply(build_pair2count, axis=1)
+        total, global_counter, group_counters, group_totals = self._reduce_results(results)
+        self._merge_counts(total, global_counter, group_counters, group_totals, group_by_field)
 
         pair2prob = {}
         if group_by_field is None:

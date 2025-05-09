@@ -135,7 +135,7 @@ class Datasource:
         return DatasourceIterator(self)
 
     @abstractmethod
-    def apply(self, func, axis: int = 0) -> int:
+    def apply(self, func, axis: int = 0) -> any:
         """
         Apply lambda function
         :param func: function to apply
@@ -151,6 +151,16 @@ class Datasource:
         :param file_handle: open file handle for writing
         :return: None
         """
+
+    @abstractmethod
+    def groupby(self, column_name: str, agg_func):
+        """
+        Group by a column and aggregate the values
+        :param column_name: column to group by
+        :param agg_func: aggregation function
+        :return: new DataSource object
+        """
+        pass
 
 
 class LabelGenerator:

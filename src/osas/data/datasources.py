@@ -26,6 +26,18 @@ sys.path.append('')
 
 from osas.core.interfaces import Datasource, DataColumn
 
+try:
+    from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
+    from pyspark.sql import functions as F, Row
+    from pyspark.sql.types import *
+    from pyspark.sql.window import Window
+    import pyspark.pandas as ps
+
+    _HAS_PYSPARK = True
+except ImportError:
+    SparkDataFrame = SparkSession = None
+    _HAS_PYSPARK = False
+
 
 class CSVDataColumn(DataColumn):
     def __init__(self, data: pd.DataFrame):
@@ -92,10 +104,13 @@ class CSVDataSource(Datasource):
         self._data[key] = value
 
     def apply(self, func, axis: int = 0) -> int:
-        return self._data.apply(func, axis=axis)
+        return self._data.apply(lambda row: func(row.to_dict()), axis=axis)
 
     def save(self, file) -> None:
         self._data.to_csv(file)
+
+    def groupby(self, column_name: str, func):
+        return self._data.groupby(column_name).agg(func).to_dict()
 
 
 if __name__ == '__main__':
