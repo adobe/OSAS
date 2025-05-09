@@ -92,10 +92,13 @@ class CSVDataSource(Datasource):
         self._data[key] = value
 
     def apply(self, func, axis: int = 0) -> int:
-        return self._data.apply(func, axis=axis)
+        return self._data.apply(lambda row: func(row.to_dict()), axis=axis)
 
     def save(self, file) -> None:
         self._data.to_csv(file)
+
+    def groupby(self, column_name: str, func):
+        return self._data.groupby(column_name).agg(func).to_dict()
 
 
 if __name__ == '__main__':

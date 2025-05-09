@@ -5,7 +5,6 @@ tests/
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 corpus/
 # User-specific stuff
-data
 .idea
 .idea/**/workspace.xml
 .idea/**/tasks.xml
