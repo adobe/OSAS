@@ -26,18 +26,6 @@ sys.path.append('')
 
 from osas.core.interfaces import Datasource, DataColumn
 
-try:
-    from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
-    from pyspark.sql import functions as F, Row
-    from pyspark.sql.types import *
-    from pyspark.sql.window import Window
-    import pyspark.pandas as ps
-
-    _HAS_PYSPARK = True
-except ImportError:
-    SparkDataFrame = SparkSession = None
-    _HAS_PYSPARK = False
-
 
 class CSVDataColumn(DataColumn):
     def __init__(self, data: pd.DataFrame):
