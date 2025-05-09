@@ -158,7 +158,6 @@ class Datasource:
         Group by a column and aggregate the values
         :param column_name: column to group by
         :param agg_func: aggregation function
-        :return: new DataSource object
         """
         pass
 
