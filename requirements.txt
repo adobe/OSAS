@@ -2,7 +2,7 @@ click==8.1.8
 elasticsearch==9.0.1
 Flask==3.1.0
 ipdb==0.13.13
-numpy==2.2.5
+numpy==1.26.4
 obfuscation_detection==0.7.2
 pandas==2.2.3
 python-decouple==3.8

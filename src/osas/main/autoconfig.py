@@ -22,6 +22,7 @@ import inspect
 
 sys.path.append('')
 from osas.data.datasources import CSVDataSource
+from osas.core.interfaces import Datasource
 from osas.core import label_generators
 
 
@@ -81,7 +82,7 @@ def _detect_field_type(datasource, count_column=None):
     return field_type
 
 
-def _get_generators(datasource: CSVDataSource, field_types: dict):
+def _get_generators(datasource: Datasource, field_types: dict):
     generator_list = []
     for key in field_types:
         if field_types[key] == 'int' or field_types[key] == 'float':
@@ -181,7 +182,17 @@ def _write_conf(generators, filename, count_column=None):
 
 
 def process(params):
-    datasource = CSVDataSource(params.input_file)
+    if params.spark:
+        from osas.data.datasources import _HAS_PYSPARK
+        if not _HAS_PYSPARK:
+            sys.stderr.write('PySpark is not installed. Please install with: pip install osas[pyspark]\n')
+            datasource = CSVDataSource(params.input_file)
+        else:
+            from osas.data.datasources import PySparkDataSource
+            datasource = PySparkDataSource(params.input_file, spark_conf_path=params.spark_conf)
+    else:
+        datasource = CSVDataSource(params.input_file)
+
     sys.stdout.write('Preprocessing')
     if params.count_column:
         cc = params.count_column
@@ -207,6 +218,8 @@ if __name__ == '__main__':
     parser.add_option('--count-column', action='store', dest='count_column',
                       help='if this value is set, OSAS will consider the data clustered and this column will indicate'
                            'the number of occurrences of the event. Otherwise, this number is considered equal to 1')
+    parser.add_option('--spark', action='store_true', help='use spark for processing')
+    parser.add_option('--spark-conf', action='store', dest='spark_conf', default=None, help='location of spark configuration file')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.output_file:

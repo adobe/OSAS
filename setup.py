@@ -30,7 +30,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=setuptools.find_packages("src"),
-    python_requires=">=3.12",
+    python_requires=">=3.9",
     include_package_data=True,
     install_requires=parse_requirements("requirements.txt"),
     package_dir={"": "src"},
@@ -38,5 +38,8 @@ setuptools.setup(
         "console_scripts": [
             "osas = osas.cli:main"
         ]
+    },
+    extras_require={
+        "pyspark": ["pyspark>=3.0.0"]
     }
 )
