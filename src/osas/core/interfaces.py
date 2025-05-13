@@ -145,10 +145,10 @@ class Datasource:
         pass
 
     @abstractmethod
-    def save(self, file_name) -> None:
+    def save(self, file_handle) -> None:
         """
         Save the data into csv format
-        :param file_name: target file name for writing
+        :param file_handle: open file handle for writing
         :return: None
         """
 

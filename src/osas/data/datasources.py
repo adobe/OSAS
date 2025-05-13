@@ -30,12 +30,14 @@ from osas.core.interfaces import Datasource, DataColumn
 
 try:
     import os
+
     os.environ['PYARROW_IGNORE_TIMEZONE'] = '1'
     from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
     from pyspark.sql import functions as F, Row
     from pyspark.sql.types import *
     from pyspark.sql.window import Window
     import pyspark.pandas as ps
+
     _HAS_PYSPARK = True
 except ImportError:
     SparkDataFrame = SparkSession = None
@@ -109,9 +111,8 @@ class CSVDataSource(Datasource):
     def apply(self, func, axis: int = 0) -> int:
         return self._data.apply(lambda row: func(row.to_dict()), axis=axis)
 
-    def save(self, file) -> None:
-        with open(file, 'w') as f:
-            self._data.to_csv(f)
+    def save(self, file_handle) -> None:
+        self._data.to_csv(file_handle)
 
     def groupby(self, column_name: str, func):
         return self._data.groupby(column_name).agg(func).to_dict()
@@ -136,7 +137,7 @@ if _HAS_PYSPARK:
                             builder = builder.config(key, value)
                         cls._spark_session = builder.getOrCreate()
                         return cls._spark_session
-                    
+
                     cls._spark_session = (
                         SparkSession.builder
                         .appName("OSAS")
@@ -259,16 +260,25 @@ if _HAS_PYSPARK:
         def apply(self, func, axis: int = 0) -> Any:
             return self._data.rdd.map(func).collect()
 
-        def save(self, file: str, format: str = 'csv') -> None:
-            if str(file).endswith('.csv'):
-                warnings.warn("Pass directory name for CSV files. The file will be saved in the directory.", UserWarning)
-
+        def save(self, file) -> None:
             save_data = self._data
             for col in save_data.columns:
                 if isinstance(save_data.schema[col].dataType, ArrayType):
                     # Convert ArrayType column to string
                     save_data = save_data.withColumn(col, F.col(col).cast("string"))
-            save_data.write.mode('overwrite').option("header", "true").csv(file)
+
+            if isinstance(file, str):
+                save_data.write.mode('overwrite').option("header", "true").csv(file)
+            elif hasattr(file, "write"):
+                data = self._data.coalesce(1)
+                header = ",".join(data.columns) + "\n"
+                file.write(header)
+                rows = data.collect()
+                for row in rows:
+                    line = ",".join(map(str, row)) + "\n"
+                    file.write(line)
+            else:
+                raise ValueError("File handle must be a string or a file-like object.")
 
         def groupby(self, column_name: str, func):
             return self._data.groupBy(column_name).agg(func).collect()
@@ -343,3 +353,10 @@ if __name__ == '__main__':
         print(item)
         if cnt == 10:
             break
+
+    if _HAS_PYSPARK:
+        tmp = PySparkDataSource('corpus/test.csv')
+        import gzip
+        with gzip.open('corpus/test2.csv.gz', 'wt', encoding='utf-8') as f:
+            tmp.save(f)
+
