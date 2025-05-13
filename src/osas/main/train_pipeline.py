@@ -22,8 +22,9 @@ import json
 
 sys.path.append('')
 
-from src.osas.pipeline import Pipeline
-from osas.data.datasources import CSVDataSource, Datasource
+from src.osas.pipeline.pipeline import Pipeline
+from osas.data.datasources import CSVDataSource
+from osas.core.interfaces import Datasource
 
 
 def is_numeric(obj):
@@ -33,7 +34,15 @@ def is_numeric(obj):
 
 def process(params):
     # load and run pipeline
-    datasource = CSVDataSource(params.input_file)
+    if params.spark:
+        from osas.data.datasources import _HAS_PYSPARK
+        if not _HAS_PYSPARK:
+            datasource = CSVDataSource(params.input_file)
+        else:
+            from osas.data.datasources import PySparkDataSource
+            datasource = PySparkDataSource(params.input_file, spark_conf_path=params.spark_conf)
+    else:
+        datasource = CSVDataSource(params.input_file)
     p = Pipeline('DEV')
     p.load_config(params.conf_file)
     if params.incremental:
@@ -53,7 +62,8 @@ if __name__ == '__main__':
     parser.add_option('--incremental', action='store_true', help='perform incremental update on the model (will load '
                                                                  '--orig-model-file and save at location specified by '
                                                                  '--model-file)')
-
+    parser.add_option('--spark', action='store_true', help='use spark for processing')
+    parser.add_option('--spark-conf', action='store', dest='spark_conf', default=None, help='location of spark configuration file')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:
