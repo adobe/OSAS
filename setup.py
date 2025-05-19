@@ -12,7 +12,7 @@ def parse_requirements(filename):
 
 setuptools.setup(
     name="osas",
-    version="0.9.1",
+    version="0.9.3",
     author="Multiple Authors",
     author_email="boros@adobe.com",
     description="One Stop Anomaly Shop",
@@ -30,7 +30,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=setuptools.find_packages("src"),
-    python_requires=">=3.12",
+    python_requires=">=3.10",
     include_package_data=True,
     install_requires=parse_requirements("requirements.txt"),
     package_dir={"": "src"},
