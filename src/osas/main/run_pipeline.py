@@ -32,26 +32,26 @@ def is_numeric(obj):
     return all(hasattr(obj, attr) for attr in attrs)
 
 
-def process(params):
+def run(input_file, conf_file, model_file, output_file, no_elastic=True, spark=False, spark_conf=None):
     # load and run pipeline
-    if params.spark:
+    if spark:
         from osas.data.datasources import _HAS_PYSPARK
         if not _HAS_PYSPARK:
-            datasource = CSVDataSource(params.input_file)
+            datasource = CSVDataSource(input_file)
         else:
             from osas.data.datasources import PySparkDataSource
-            datasource = PySparkDataSource(params.input_file, spark_conf_path=params.spark_conf)
+            datasource = PySparkDataSource(input_file, spark_conf_path=spark_conf)
     else:
-        datasource = CSVDataSource(params.input_file)
+        datasource = CSVDataSource(input_file)
     p = Pipeline('DEV')
-    p.load_config(params.conf_file)
-    p.load_model(params.model_file)
+    p.load_config(conf_file)
+    p.load_model(model_file)
     p(datasource)
     # save, if necessary
-    if params.output_file:
-        datasource.save(params.output_file)
+    if output_file:
+        datasource.save(output_file)
     # push to elasticsearch
-    if not params.no_elastic:
+    if not no_elastic:
         try:
             es = Elasticsearch([{'host': 'localhost', 'port': 9200}], http_auth=('admin', 'admin'))
             data = [item for item in datasource]
@@ -64,6 +64,18 @@ def process(params):
             helpers.bulk(es, data, index="anomalies", doc_type="type")
         except Exception as e:
             sys.stdout.write('Unable to push data to ElasticSearch:  {0}\n'.format(str(e)))
+
+
+def process(params):
+    run(
+        input_file=params.input_file,
+        conf_file=params.conf_file,
+        model_file=params.model_file,
+        output_file=params.output_file,
+        no_elastic=params.no_elastic,
+        spark=params.spark,
+        spark_conf=params.spark_conf
+    )
 
 
 if __name__ == '__main__':
