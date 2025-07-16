@@ -33,13 +33,13 @@ try:
 
     os.environ['PYARROW_IGNORE_TIMEZONE'] = '1'
     from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
-    from pyspark.sql import functions as F, Row
+    from pyspark.sql import functions as F
     from pyspark.sql.types import *
-    from pyspark.sql.window import Window
-    import pyspark.pandas as ps
+    from pyspark.sql.functions import udf
 
     _HAS_PYSPARK = True
-except ImportError:
+except ImportError as e:
+    print(e)
     SparkDataFrame = SparkSession = None
     _HAS_PYSPARK = False
 
@@ -137,7 +137,8 @@ if _HAS_PYSPARK:
                             builder = builder.config(key, value)
                         cls._spark_session = builder.getOrCreate()
                         return cls._spark_session
-
+                    
+                    # print(SparkSession.getActiveSession())
                     cls._spark_session = (
                         SparkSession.builder
                         .appName("OSAS")
@@ -148,21 +149,27 @@ if _HAS_PYSPARK:
                         .master("local[*]")
                         .getOrCreate()
                     )
+                    # print(cls._spark_session)
+                
                 return cls._spark_session
 
-        def __init__(self, file_path: str, spark_conf_path=None, **options):
+        def __init__(self, file_path_or_table_name: str, spark_conf_path=None, **options):
             super().__init__()
             self._spark = self.get_or_create_spark_session(spark_conf_path)
 
-            # Read CSV file with optimized settings
-            self._data = (
-                self._spark.read
-                .option("inferSchema", "true")
-                .option("header", "true")
-                .option("maxColumns", "10000")
-                .option("maxCharsPerColumn", "10000")
-                .csv(file_path, **options)
-            )
+            if file_path_or_table_name.endswith(".csv"):
+                # Read CSV file with optimized settings
+                self._data = (
+                    self._spark.read
+                    .option("inferSchema", "true")
+                    .option("header", "true")
+                    .option("maxColumns", "10000")
+                    .option("maxCharsPerColumn", "10000")
+                    .csv(file_path_or_table_name, **options)
+                )
+            else:
+                # Read Spark table
+                self._data = self._spark.table(file_path_or_table_name)
 
             # Cache the DataFrame for better performance
             self._data.cache()
@@ -268,7 +275,12 @@ if _HAS_PYSPARK:
                     save_data = save_data.withColumn(col, F.col(col).cast("string"))
 
             if isinstance(file, str):
-                save_data.write.mode('overwrite').option("header", "true").csv(file)
+                if file.endswith(".csv"):
+                    # Save to CSV
+                    save_data.toPandas().to_csv(file, index=False)
+                else:
+                    # Save to Spark table
+                    save_data.write.mode("overwrite").saveAsTable(file)
             elif hasattr(file, "write"):
                 data = self._data.coalesce(1)
                 header = ",".join(data.columns) + "\n"

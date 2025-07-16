@@ -22,7 +22,7 @@ import json
 
 sys.path.append('')
 
-from src.osas.pipeline.pipeline import Pipeline
+from osas.pipeline.pipeline import Pipeline
 from osas.data.datasources import CSVDataSource
 from osas.core.interfaces import Datasource
 
