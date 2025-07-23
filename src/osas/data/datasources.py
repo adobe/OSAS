@@ -138,7 +138,6 @@ if _HAS_PYSPARK:
                         cls._spark_session = builder.getOrCreate()
                         return cls._spark_session
                     
-                    # print(SparkSession.getActiveSession())
                     cls._spark_session = (
                         SparkSession.builder
                         .appName("OSAS")
@@ -149,7 +148,6 @@ if _HAS_PYSPARK:
                         .master("local[*]")
                         .getOrCreate()
                     )
-                    # print(cls._spark_session)
                 
                 return cls._spark_session
 
