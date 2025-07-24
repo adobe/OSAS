@@ -137,7 +137,7 @@ if _HAS_PYSPARK:
                             builder = builder.config(key, value)
                         cls._spark_session = builder.getOrCreate()
                         return cls._spark_session
-                    
+
                     cls._spark_session = (
                         SparkSession.builder
                         .appName("OSAS")
@@ -148,13 +148,20 @@ if _HAS_PYSPARK:
                         .master("local[*]")
                         .getOrCreate()
                     )
-                
+
                 return cls._spark_session
 
-        def __init__(self, file_path_or_table_name: str, spark_conf_path=None, **options):
+        def __init__(self, file_path_or_table_name: str = None, spark_df: SparkDataFrame = None, spark_conf_path=None,
+                     **options):
             super().__init__()
-            self._spark = self.get_or_create_spark_session(spark_conf_path)
+            if spark_df is None and file_path_or_table_name is None:
+                raise "At least one of spark_df or has to be set"
+            if spark_df is not None and file_path_or_table_name is not None:
+                raise "Only one of spark_df or file_path_or_table_name has to be set"
 
+            self._spark = self.get_or_create_spark_session(spark_conf_path)
+            if spark_df is not None:
+                self._data = spark_df
             if file_path_or_table_name.endswith(".csv"):
                 # Read CSV file with optimized settings
                 self._data = (
@@ -367,6 +374,6 @@ if __name__ == '__main__':
     if _HAS_PYSPARK:
         tmp = PySparkDataSource('corpus/test.csv')
         import gzip
+
         with gzip.open('corpus/test2.csv.gz', 'wt', encoding='utf-8') as f:
             tmp.save(f)
-
