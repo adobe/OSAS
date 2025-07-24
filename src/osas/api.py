@@ -108,20 +108,25 @@ class OSAS:
         else:
             return osas_instances[total_hash]
 
-    def __call__(self, row_dict: dict):
-        label_list = []
-        for lg in self._pipeline:
-            llist = lg(row_dict)
-            for label in llist:
-                label_list.append(label)
-        # create a dummy entry
+    def __call__(self, row_dict_or_datasource):
+        if isinstance(row_dict_or_datasource, dict):
+            label_list = []
+            for lg in self._pipeline:
+                llist = lg(row_dict_or_datasource)
+                for label in llist:
+                    label_list.append(label)
+            # create a dummy entry
 
-        dummy_ds = [{'_labels': label_list}]
-        score = self._detect_anomalies(dummy_ds, verbose=False)
-        return {
-            'labels': label_list,
-            'score': score
-        }
+            dummy_ds = [{'_labels': label_list}]
+            score = self._detect_anomalies(dummy_ds, verbose=False)
+            return {
+                'labels': label_list,
+                'score': score
+            }
+        else:
+            from .main.run_pipeline import run as run_pipeline
+            osas._pipeline(row_dict_or_datasource)
+            return row_dict_or_datasource
 
 
 if __name__ == '__main__':
