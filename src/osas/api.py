@@ -124,9 +124,20 @@ class OSAS:
                 'score': score
             }
         else:
-            from .main.run_pipeline import run as run_pipeline
-            osas._pipeline(row_dict_or_datasource)
-            return row_dict_or_datasource
+            def process_item(item):
+                label_list = []
+                for lg in self._pipeline:
+                    llist = lg(item)
+                    for label in llist:
+                        label_list.append(label)
+                return label_list
+
+            all_labels = row_dict_or_datasource.apply(process_item, axis=1)
+            # row_dict_or_datasource['labels'] = all_labels
+            row_dict_or_datasource['_labels'] = all_labels
+            # if self._detect_anomalies is not None:
+            #     scores = self._detect_anomalies(row_dict_or_datasource)
+            #     dataset['_scores'] = scores
 
 
 if __name__ == '__main__':
