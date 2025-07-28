@@ -17,7 +17,7 @@
 #
 
 import sys
-from typing import Any
+from typing import Any, Union
 import warnings
 import threading
 
@@ -151,19 +151,15 @@ if _HAS_PYSPARK:
 
                 return cls._spark_session
 
-        def __init__(self, file_path_or_table_name: str = None, spark_df: SparkDataFrame = None, spark_conf_path=None,
+        def __init__(self, spark_df: Union[SparkDataFrame, str] = None, spark_conf_path=None,
                      **options):
             super().__init__()
-            if spark_df is None and file_path_or_table_name is None:
-                raise "At least one of spark_df or has to be set"
-            if spark_df is not None and file_path_or_table_name is not None:
-                raise "Only one of spark_df or file_path_or_table_name has to be set"
+            if spark_df is None:
+                raise "A spark dataframe or csv file must be provided."
 
             self._spark = self.get_or_create_spark_session(spark_conf_path)
-            if spark_df is not None:
-                self._data = spark_df
-            elif file_path_or_table_name is not None and isinstance(file_path_or_table_name, str):
-                if file_path_or_table_name.endswith(".csv"):
+            if isinstance(spark_df, str):
+                if spark_df.endswith(".csv"):
                     # Read CSV file with optimized settings
                     self._data = (
                         self._spark.read
@@ -171,13 +167,13 @@ if _HAS_PYSPARK:
                         .option("header", "true")
                         .option("maxColumns", "10000")
                         .option("maxCharsPerColumn", "10000")
-                        .csv(file_path_or_table_name, **options)
+                        .csv(spark_df, **options)
                     )
                 else:
                     # This is a spark table
-                    self._data = self._spark.table(file_path_or_table_name)
+                    self._data = self._spark.table(spark_df)
             else:
-                raise ValueError("At least one of spark_df or file_path_or_table_name has to be set");
+                self._data = spark_df
 
             # Cache the DataFrame for better performance
             self._data.cache()
