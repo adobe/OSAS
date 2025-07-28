@@ -162,19 +162,22 @@ if _HAS_PYSPARK:
             self._spark = self.get_or_create_spark_session(spark_conf_path)
             if spark_df is not None:
                 self._data = spark_df
-            if file_path_or_table_name.endswith(".csv"):
-                # Read CSV file with optimized settings
-                self._data = (
-                    self._spark.read
-                    .option("inferSchema", "true")
-                    .option("header", "true")
-                    .option("maxColumns", "10000")
-                    .option("maxCharsPerColumn", "10000")
-                    .csv(file_path_or_table_name, **options)
-                )
+            elif file_path_or_table_name is not None:
+                if file_path_or_table_name.endswith(".csv"):
+                    # Read CSV file with optimized settings
+                    self._data = (
+                        self._spark.read
+                        .option("inferSchema", "true")
+                        .option("header", "true")
+                        .option("maxColumns", "10000")
+                        .option("maxCharsPerColumn", "10000")
+                        .csv(file_path_or_table_name, **options)
+                    )
+                else:
+                    # This is a spark table
+                    self._data = self._spark.table(file_path_or_table_name)
             else:
-                # Read Spark table
-                self._data = self._spark.table(file_path_or_table_name)
+                raise ValueError("At least one of spark_df or file_path_or_table_name has to be set");
 
             # Cache the DataFrame for better performance
             self._data.cache()
