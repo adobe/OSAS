@@ -162,7 +162,7 @@ if _HAS_PYSPARK:
             self._spark = self.get_or_create_spark_session(spark_conf_path)
             if spark_df is not None:
                 self._data = spark_df
-            elif file_path_or_table_name is not None:
+            elif file_path_or_table_name is not None and isinstance(file_path_or_table_name, str):
                 if file_path_or_table_name.endswith(".csv"):
                     # Read CSV file with optimized settings
                     self._data = (
