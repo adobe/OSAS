@@ -36,6 +36,7 @@ try:
     from pyspark.sql import functions as F
     from pyspark.sql.types import *
     from pyspark.sql.functions import udf
+    from pyspark.sql.window import Window
 
     _HAS_PYSPARK = True
 except ImportError as e:
@@ -155,7 +156,7 @@ if _HAS_PYSPARK:
                      **options):
             super().__init__()
             if spark_df is None:
-                raise "A spark dataframe or csv file must be provided."
+                raise ValueError("A spark dataframe or csv file must be provided.")
 
             self._spark = self.get_or_create_spark_session(spark_conf_path)
             if isinstance(spark_df, str):
@@ -179,7 +180,9 @@ if _HAS_PYSPARK:
             self._data.cache()
 
             # Add a unique identifier column for efficient row access
-            self._data = self._data.withColumn("_row_id", F.monotonically_increasing_id())
+            # Use row_number() to ensure sequential IDs starting from 1
+            window = Window.orderBy(F.lit(1))
+            self._data = self._data.withColumn("_row_id", F.row_number().over(window) - 1)
 
             # Optimize partitions based on data size
             num_partitions = min(10, max(1, self._data.count() // 1000))
