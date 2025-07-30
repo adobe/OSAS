@@ -112,8 +112,11 @@ class CSVDataSource(Datasource):
     def apply(self, func, axis: int = 0) -> int:
         return self._data.apply(lambda row: func(row.to_dict()), axis=axis)
 
-    def save(self, file_handle) -> None:
-        self._data.to_csv(file_handle)
+    def save(self, file_handle, append=False) -> None:
+        if append:
+            self._data.to_csv(file_handle, mode='a', header=False, index=False)
+        else:
+            self._data.to_csv(file_handle)
 
     def groupby(self, column_name: str, func):
         return self._data.groupby(column_name).agg(func).to_dict()
@@ -274,7 +277,7 @@ if _HAS_PYSPARK:
         def apply(self, func, axis: int = 0) -> Any:
             return self._data.rdd.map(func).collect()
 
-        def save(self, file) -> None:
+        def save(self, file, append=False) -> None:
             save_data = self._data
             for col in save_data.columns:
                 if isinstance(save_data.schema[col].dataType, ArrayType):
@@ -287,7 +290,10 @@ if _HAS_PYSPARK:
                     save_data.toPandas().to_csv(file, index=False)
                 else:
                     # Save to Spark table
-                    save_data.write.mode("overwrite").saveAsTable(file)
+                    if append:
+                        save_data.write.mode("append").saveAsTable(file)
+                    else:
+                        save_data.write.mode("overwrite").saveAsTable(file)
             elif hasattr(file, "write"):
                 data = self._data.coalesce(1)
                 header = ",".join(data.columns) + "\n"

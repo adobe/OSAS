@@ -32,7 +32,7 @@ def is_numeric(obj):
     return all(hasattr(obj, attr) for attr in attrs)
 
 
-def run(input_file, conf_file, model_file, output_file, no_elastic=True, spark=False, spark_conf=None):
+def run(input_file, conf_file, model_file, output_file, no_elastic=True, spark=False, spark_conf=None, append=False):
     # load and run pipeline
     if spark:
         from osas.data.datasources import _HAS_PYSPARK
@@ -49,7 +49,7 @@ def run(input_file, conf_file, model_file, output_file, no_elastic=True, spark=F
     p(datasource)
     # save, if necessary
     if output_file:
-        datasource.save(output_file)
+        datasource.save(output_file, append=append)
     # push to elasticsearch
     if not no_elastic:
         try:
