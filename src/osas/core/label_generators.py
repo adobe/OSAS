@@ -733,6 +733,22 @@ class MultinomialFieldCombiner(LabelGenerator):
 
         self._model['grand_total'] = self._model.get('grand_total', 0) + total
 
+
+    def compute_probabilities(self, group_by_field: Optional[Any], pair2count: dict) -> dict:
+        pair2prob = {}
+        if group_by_field is None:
+            total = pair2count.get('TOTAL', 1)  # Use the TOTAL from pair2count
+            for key in pair2count:
+                pair2prob[key] = pair2count[key] / total
+        else:
+            pair2count = self._model['pair2count']
+            for k1 in pair2count:
+                pair2prob[k1] = {}
+                total = int(pair2count[k1]['TOTAL'])
+                for key in pair2count[k1]:
+                    pair2prob[k1][key] = pair2count[k1][key] / total
+        return pair2prob
+
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         pair2count = self._model['pair2count']  # this is used for incremental updates
         group_by_field = self._model['group_by']
@@ -752,17 +768,7 @@ class MultinomialFieldCombiner(LabelGenerator):
         total, global_counter, group_counters, group_totals = self._reduce_results(results)
         self._merge_counts(total, global_counter, group_counters, group_totals, group_by_field)
 
-        pair2prob = {}
-        if group_by_field is None:
-            for key in pair2count:
-                pair2prob[key] = pair2count[key] / total
-        else:
-            pair2count = self._model['pair2count']
-            for k1 in pair2count:
-                pair2prob[k1] = {}
-                total = int(pair2count[k1]['TOTAL'])
-                for key in pair2count[k1]:
-                    pair2prob[k1][key] = pair2count[k1][key] / total
+        pair2prob = self.compute_probabilities(group_by_field, pair2count)
 
         self._model['pair2count'] = pair2count
         self._model['pair2prob'] = pair2prob
@@ -809,6 +815,50 @@ class MultinomialFieldCombiner(LabelGenerator):
         lg = MultinomialFieldCombiner()
         lg._model = json.loads(pretrained)
         return lg
+
+    def merge(self, generators: list['MultinomialFieldCombiner']) -> None:
+        """
+        Merge multiple MultinomialFieldCombiner instances into this one.
+        :param generators: List of MultinomialFieldCombiner instances to merge.
+        """
+        for gen in generators:
+            if not isinstance(gen, MultinomialFieldCombiner):
+                raise ValueError("All generators must be instances of MultinomialFieldCombiner")
+            
+            # Check model compatibility
+            if (self._model['field_names'] != gen._model['field_names'] or
+                self._model['group_by'] != gen._model['group_by']):
+                raise ValueError("Cannot merge generators with different field_names or group_by configurations")
+            
+            # Merge pair2count structures
+            self._merge_pair2count(gen._model['pair2count'])
+            
+            # Update grand total
+            self._model['grand_total'] = self._model.get('grand_total', 0) + gen._model.get('grand_total', 0)
+        
+        # Recalculate probabilities after all merges are complete
+        self._model['pair2prob'] = self.compute_probabilities(self._model['group_by'], self._model['pair2count'])
+
+    def _merge_pair2count(self, other_pair2count: dict) -> None:
+        """
+        Helper method to merge pair2count structures, handling both flat and nested cases.
+        """
+        current_pair2count = self._model['pair2count']
+        group_by = self._model['group_by']
+        
+        if group_by is None:
+            # Flat structure: direct key-value pairs
+            for key, count in other_pair2count.items():
+                current_pair2count[key] = current_pair2count.get(key, 0) + count
+        else:
+            # Nested structure: group_by_value -> {pair -> count}
+            for group_value, group_counts in other_pair2count.items():
+                if group_value not in current_pair2count:
+                    current_pair2count[group_value] = {}
+                for key, count in group_counts.items():
+                    current_pair2count[group_value][key] = current_pair2count[group_value].get(key, 0) + count
+
+    
 
 
 class NumericalFieldCombiner(LabelGenerator):
