@@ -737,7 +737,7 @@ class MultinomialFieldCombiner(LabelGenerator):
     def compute_probabilities(self, group_by_field: Optional[Any], pair2count: dict) -> dict:
         pair2prob = {}
         if group_by_field is None:
-            total = pair2count.get('TOTAL', 1)  # Use the TOTAL from pair2count
+            total = pair2count.get('TOTAL', 1)
             for key in pair2count:
                 pair2prob[key] = pair2count[key] / total
         else:
