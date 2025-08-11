@@ -17,7 +17,7 @@
 #
 
 import sys
-from typing import Any
+from typing import Any, Union
 import warnings
 import threading
 
@@ -33,13 +33,14 @@ try:
 
     os.environ['PYARROW_IGNORE_TIMEZONE'] = '1'
     from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
-    from pyspark.sql import functions as F, Row
+    from pyspark.sql import functions as F
     from pyspark.sql.types import *
+    from pyspark.sql.functions import udf
     from pyspark.sql.window import Window
-    import pyspark.pandas as ps
 
     _HAS_PYSPARK = True
-except ImportError:
+except ImportError as e:
+    print(e)
     SparkDataFrame = SparkSession = None
     _HAS_PYSPARK = False
 
@@ -111,8 +112,11 @@ class CSVDataSource(Datasource):
     def apply(self, func, axis: int = 0) -> int:
         return self._data.apply(lambda row: func(row.to_dict()), axis=axis)
 
-    def save(self, file_handle) -> None:
-        self._data.to_csv(file_handle)
+    def save(self, file_handle, append=False) -> None:
+        if append:
+            self._data.to_csv(file_handle, mode='a', header=False, index=False)
+        else:
+            self._data.to_csv(file_handle)
 
     def groupby(self, column_name: str, func):
         return self._data.groupby(column_name).agg(func).to_dict()
@@ -148,27 +152,40 @@ if _HAS_PYSPARK:
                         .master("local[*]")
                         .getOrCreate()
                     )
+
                 return cls._spark_session
 
-        def __init__(self, file_path: str, spark_conf_path=None, **options):
+        def __init__(self, spark_df: Union[SparkDataFrame, str] = None, spark_conf_path=None,
+                     **options):
             super().__init__()
-            self._spark = self.get_or_create_spark_session(spark_conf_path)
+            if spark_df is None:
+                raise ValueError("A spark dataframe or csv file must be provided.")
 
-            # Read CSV file with optimized settings
-            self._data = (
-                self._spark.read
-                .option("inferSchema", "true")
-                .option("header", "true")
-                .option("maxColumns", "10000")
-                .option("maxCharsPerColumn", "10000")
-                .csv(file_path, **options)
-            )
+            self._spark = self.get_or_create_spark_session(spark_conf_path)
+            if isinstance(spark_df, str):
+                if spark_df.endswith(".csv"):
+                    # Read CSV file with optimized settings
+                    self._data = (
+                        self._spark.read
+                        .option("inferSchema", "true")
+                        .option("header", "true")
+                        .option("maxColumns", "10000")
+                        .option("maxCharsPerColumn", "10000")
+                        .csv(spark_df, **options)
+                    )
+                else:
+                    # This is a spark table
+                    self._data = self._spark.table(spark_df)
+            else:
+                self._data = spark_df
 
             # Cache the DataFrame for better performance
             self._data.cache()
 
             # Add a unique identifier column for efficient row access
-            self._data = self._data.withColumn("_row_id", F.monotonically_increasing_id())
+            # Use row_number() to ensure sequential IDs starting from 1
+            window = Window.orderBy(F.lit(1))
+            self._data = self._data.withColumn("_row_id", F.row_number().over(window) - 1)
 
             # Optimize partitions based on data size
             num_partitions = min(10, max(1, self._data.count() // 1000))
@@ -260,7 +277,7 @@ if _HAS_PYSPARK:
         def apply(self, func, axis: int = 0) -> Any:
             return self._data.rdd.map(func).collect()
 
-        def save(self, file) -> None:
+        def save(self, file, append=False) -> None:
             save_data = self._data
             for col in save_data.columns:
                 if isinstance(save_data.schema[col].dataType, ArrayType):
@@ -268,7 +285,15 @@ if _HAS_PYSPARK:
                     save_data = save_data.withColumn(col, F.col(col).cast("string"))
 
             if isinstance(file, str):
-                save_data.write.mode('overwrite').option("header", "true").csv(file)
+                if file.endswith(".csv"):
+                    # Save to CSV
+                    save_data.toPandas().to_csv(file, index=False)
+                else:
+                    # Save to Spark table
+                    if append:
+                        save_data.write.mode("append").saveAsTable(file)
+                    else:
+                        save_data.write.mode("overwrite").saveAsTable(file)
             elif hasattr(file, "write"):
                 data = self._data.coalesce(1)
                 header = ",".join(data.columns) + "\n"
@@ -357,6 +382,6 @@ if __name__ == '__main__':
     if _HAS_PYSPARK:
         tmp = PySparkDataSource('corpus/test.csv')
         import gzip
+
         with gzip.open('corpus/test2.csv.gz', 'wt', encoding='utf-8') as f:
             tmp.save(f)
-
