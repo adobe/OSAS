@@ -143,7 +143,7 @@ class OSAS:
 if __name__ == '__main__':
     cfg = OSASConfig.from_file('tests/model.conf')
     print(cfg.md5())
-    mdl = OSASPretrainedModel.from_file('tests/model.json'
+    mdl = OSASPretrainedModel.from_file('tests/model.json')
     print(mdl.md5())
     time_start = time.time()
     osas = OSAS.get_instance(cfg, mdl)
