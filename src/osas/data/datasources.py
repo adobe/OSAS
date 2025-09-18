@@ -291,9 +291,9 @@ if _HAS_PYSPARK:
                 else:
                     # Save to Spark table
                     if append:
-                        save_data.write.mode("append").saveAsTable(file)
+                        save_data.write.mode("append").option("mergeSchema", "true").option("overwriteSchema", "true").saveAsTable(file)
                     else:
-                        save_data.write.mode("overwrite").saveAsTable(file)
+                        save_data.write.mode("overwrite").option("mergeSchema", "true").option("overwriteSchema", "true").saveAsTable(file)
             elif hasattr(file, "write"):
                 data = self._data.coalesce(1)
                 header = ",".join(data.columns) + "\n"
