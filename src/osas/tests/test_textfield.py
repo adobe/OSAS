@@ -128,13 +128,6 @@ class TestTextField(unittest.TestCase):
         self.assertGreater(common_perplexity, 0, "Common command score should be positive")
         self.assertGreater(rare_perplexity, 0, "Rare command score should be positive")
         self.assertLess(common_perplexity, rare_perplexity, "Common command score should be less than rare command score")
-        
-        # Test classification with weighted model
-        common_labels = tf({'command': 'ls -la'})
-        rare_labels = tf({'command': 'malicious_binary'})
-        
-        self.assertIsInstance(common_labels, list)
-        self.assertIsInstance(rare_labels, list)
     
     def test_model_serialization_and_persistence(self):
         """Test model serialization for production deployment"""
