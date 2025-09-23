@@ -568,7 +568,6 @@ class TextField(LabelGenerator):
     def _compute_perplexity(self, text):
         total = 0
         ngrams = self._get_ngrams(text)
-
         for ngram in ngrams:
             if ngram in self._model:
                 sup_count = math.log(self._model[ngram]) + 1
@@ -624,7 +623,7 @@ class TextField(LabelGenerator):
         toks = start + toks + stop
         ngrams = []
         for ngram_order in range(self._ngram_range[0], self._ngram_range[1] + 1):
-            for ii in range(len(toks) - ngram_order):
+            for ii in range(len(toks) - ngram_order + 1):
                 ngram = tuple(toks[ii:ii + ngram_order])
                 ngrams.append(ngram)
         return ngrams
