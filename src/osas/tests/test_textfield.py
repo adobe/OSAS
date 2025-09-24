@@ -266,6 +266,73 @@ class TestTextField(unittest.TestCase):
         self.assertTrue(all(len(ngram) == 2 for ngram in single_ngrams), "Should only generate bigrams")
         self.assertEqual(len(single_ngrams), 3, "Should generate exactly 3 bigrams")
 
+    def test_merge_behavior_combined(self):
+        """Test TextField.merge by comparing with a combined dataset baseline"""
+        # Two separate datasets with enough repetition to ensure unigrams are accepted consistently
+        data_a = [
+            {'command': 'ls -la'},
+            {'command': 'ls -la'},
+            {'command': 'ls -la'},
+            {'command': 'cat file.txt'},
+            {'command': 'cat file.txt'},
+            {'command': 'cat file.txt'},
+        ]
+        data_b = [
+            {'command': 'ls -la'},
+            {'command': 'ls -la'},
+            {'command': 'ls -la'},
+            {'command': 'grep error'},
+            {'command': 'grep error'},
+            {'command': 'grep error'},
+        ]
+
+        dataset_a = MockDatasource(data_a)
+        dataset_b = MockDatasource(data_b)
+        
+        combined_data = data_a + data_b
+        dataset_combined = MockDatasource(combined_data)
+        
+        # Build separate models and merge
+        tf_a = TextField('command', lm_mode='token', ngram_range=(2, 3))
+        tf_b = TextField('command', lm_mode='token', ngram_range=(2, 3))
+        tf_a.build_model(dataset_a)
+        tf_b.build_model(dataset_b)
+        tf_a.merge([tf_b])
+        tf_a.compute_statistics(dataset_combined)
+        
+        # Build baseline model on combined dataset
+        tf_baseline = TextField('command', lm_mode='token', ngram_range=(2, 3))
+        tf_baseline.build_model(dataset_combined)
+        
+        # Compare key properties
+        self.assertEqual(tf_a._total_inf, tf_baseline._total_inf, "Total inference counts should match")
+        
+        # N-gram counts should be identical for shared patterns
+        test_ngrams = [('ls', '-'), ('ls', '-', 'la'), ('grep', 'error')]
+        for ngram in test_ngrams:
+            if ngram in tf_a._model and ngram in tf_baseline._model:
+                self.assertEqual(tf_a._model[ngram], tf_baseline._model[ngram], 
+                               f"N-gram count for {ngram} should match")
+        
+        # Accepted unigrams should be the same
+        self.assertEqual(set(tf_a._accepted_unigrams.keys()), 
+                        set(tf_baseline._accepted_unigrams.keys()),
+                        "Accepted unigrams should match")
+        
+        # Mean and standard deviation should match
+        self.assertAlmostEqual(tf_a._mean_perplex, tf_baseline._mean_perplex, places=6,
+                              msg="Mean perplexity should match between merged and baseline models")
+        self.assertAlmostEqual(tf_a._std_perplex, tf_baseline._std_perplex, places=6,
+                              msg="Standard deviation should match between merged and baseline models")
+        
+        # Test that merge ignores non-TextField objects
+        tf_test = TextField('command', lm_mode='token', ngram_range=(2, 3))
+        tf_test.build_model(dataset_a)
+        original_total = tf_test._total_inf
+        tf_test.merge([tf_b, "not_a_textfield", 123, None])
+        self.assertEqual(tf_test._total_inf, tf_a._total_inf, 
+                        "Should ignore non-TextField objects in merge list")
+
 
 if __name__ == '__main__':
     unittest.main()
