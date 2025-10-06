@@ -328,7 +328,6 @@ class TestTextField(unittest.TestCase):
         # Test that merge ignores non-TextField objects
         tf_test = TextField('command', lm_mode='token', ngram_range=(2, 3))
         tf_test.build_model(dataset_a)
-        original_total = tf_test._total_inf
         tf_test.merge([tf_b, "not_a_textfield", 123, None])
         self.assertEqual(tf_test._total_inf, tf_a._total_inf, 
                         "Should ignore non-TextField objects in merge list")
