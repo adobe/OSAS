@@ -30,6 +30,7 @@ from osas.core.utils import Tokenizer
 from enum import Enum
 from typing import Any, Dict, Iterable, Optional, Tuple
 from collections import Counter, defaultdict
+import warnings
 
 
 # from lol.api import LOLC
@@ -533,6 +534,11 @@ class TextField(LabelGenerator):
 
         return ngram2count, total_inf
 
+    def compute_perplexity_func(self, item):
+            text = item[self._field_name]
+            perplexity = self._compute_perplexity(text)
+            return perplexity
+
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         unigram2count, _ = self.build_ngram2count(dataset, count_column, unigrams_only=True)
         for unigram in unigram2count:
@@ -546,15 +552,9 @@ class TextField(LabelGenerator):
         ser_model = [self._field_name, self._lm_mode, self._ngram_range[0], self._ngram_range[1], self._mean_perplex,
                      self._std_perplex, self._total_inf]
 
-        def compute_perplexity_func(item):
-            text = item[self._field_name]
-            perplexity = self._compute_perplexity(text)
-            return perplexity
+        
 
-        all_perplex = dataset.apply(compute_perplexity_func, axis=1)
-
-        self._mean_perplex = np.mean(all_perplex)
-        self._std_perplex = np.std(all_perplex)
+        self.compute_statistics(dataset)
         ser_model[4] = self._mean_perplex
         ser_model[5] = self._std_perplex
         ser_model.append(self._accepted_unigrams)
@@ -583,7 +583,7 @@ class TextField(LabelGenerator):
         elif perplexity - self._mean_perplex < 4 * self._std_perplex:
             return ['{0}_HIGH_PERPLEXITY'.format(self._field_name.upper()), perplexity * 10]
         else:
-            return ['{0}_EXTREEME_PERPLEXITY'.format(self._field_name.upper()), perplexity * 10]
+            return ['{0}_EXTREME_PERPLEXITY'.format(self._field_name.upper()), perplexity * 10]
 
     @staticmethod
     def from_pretrained(pretrained: str) -> LabelGenerator:
@@ -627,6 +627,45 @@ class TextField(LabelGenerator):
                 ngram = tuple(toks[ii:ii + ngram_order])
                 ngrams.append(ngram)
         return ngrams
+
+    def merge(self, generators: list['TextField']) -> None:
+        """
+        Merge multiple TextField instances into this one.
+        :param generators: List of TextField instances to merge.
+        """
+        total_inf = self._total_inf
+
+        warnings.warn(
+            "Not implemented carefully, you need to call compute_statistics() after merging on the full dataset for new perplexity based score thresholds.",
+            UserWarning,
+            stacklevel=2
+        )
+
+        for gen in generators:
+            if not isinstance(gen, TextField):
+                continue
+
+            # merge ngram2count
+            for ngram in gen._model:
+                if ngram in self._model:
+                    self._model[ngram] += gen._model[ngram]
+                else:
+                    self._model[ngram] = gen._model[ngram]
+
+            # merge accepted unigrams
+            for unigram in gen._accepted_unigrams:
+                if unigram not in self._accepted_unigrams:
+                    self._accepted_unigrams[unigram] = 1
+
+            # merge total_inf
+            total_inf += gen._total_inf
+        self._total_inf = total_inf
+
+    def compute_statistics(self, dataset: Datasource) -> None:
+        all_perplex = dataset.apply(self.compute_perplexity_func, axis=1)
+        self._mean_perplex = float(np.mean(all_perplex)) if len(all_perplex) > 0 else 0.0
+        self._std_perplex = float(np.std(all_perplex)) if len(all_perplex) > 0 else 0.0
+
 
 
 class MultinomialField(LabelGenerator):
