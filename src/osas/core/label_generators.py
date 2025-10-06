@@ -30,6 +30,7 @@ from osas.core.utils import Tokenizer
 from enum import Enum
 from typing import Any, Dict, Iterable, Optional, Tuple
 from collections import Counter, defaultdict
+import warnings
 
 
 # from lol.api import LOLC
@@ -633,6 +634,12 @@ class TextField(LabelGenerator):
         :param generators: List of TextField instances to merge.
         """
         total_inf = self._total_inf
+
+        warnings.warn(
+            "Not implemented carefully, you need to call compute_statistics() after merging on the full dataset for new perplexity based score thresholds.",
+            UserWarning,
+            stacklevel=2
+        )
 
         for gen in generators:
             if not isinstance(gen, TextField):
