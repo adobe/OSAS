@@ -184,7 +184,7 @@ if _HAS_PYSPARK:
 
             # Add a unique identifier column for efficient row access
             # Use row_number() to ensure sequential IDs starting from 1
-            window = Window.orderBy(F.lit(1))
+            window = Window.orderBy(F.monotonically_increasing_id())
             self._data = self._data.withColumn("_row_id", F.row_number().over(window) - 1)
 
             # Optimize partitions based on data size
