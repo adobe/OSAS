@@ -237,9 +237,7 @@ class Pipeline:
                 for pdf in pdf_iter:
                     pdf[dest_field_score] = detect_anomalies(CSVDataSource(data=pdf))
                     yield pdf
-
-
-
+                    
             scored_df = dataset.get_dataframe.withColumn(dest_field_score, lit(None).cast("double")).mapInPandas(process_partition, schema=schema)
             print(scored_df)
             dataset.set_dataframe(scored_df)
