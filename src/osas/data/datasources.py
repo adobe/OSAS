@@ -241,28 +241,7 @@ if _HAS_PYSPARK:
                 raise TypeError(f"Unsupported type: {type(val)}")
 
         def __setitem__(self, key: str, value: list):
-            if not value:
-                raise ValueError("Cannot assign empty list to a column.")
-
-            # Convert all values to Python native types to avoid numpy type issues
-            converted_values = [self.convert_to_python_type(v) for v in value]
-            
-            # Prepare RDD with indices
-            rdd_with_index = self._data.rdd.zipWithIndex()
-            new_rdd = rdd_with_index.map(
-                lambda row_index: dict(row_index[0].asDict(), **{key: converted_values[row_index[1]]})
-            )
-
-            # Build new schema with the new column
-            # Infer dtype
-            dtype = self.infer_type(converted_values[0])
-            old_schema = self._data.schema
-            new_fields = old_schema.fields + [StructField(key, dtype, True)]
-            new_schema = StructType(new_fields)
-
-            # Create DataFrame with explicit schema
-            self._data = self._spark.createDataFrame(new_rdd, schema=new_schema)
-
+            raise NotImplementedError("Setting items by index is not supported for PySparkDataSource.")
 
         def apply(self, func, axis: int = 0) -> Any:
             return self._data.rdd.map(func).collect()
