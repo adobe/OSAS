@@ -16,7 +16,6 @@
 # limitations under the License.
 #
 
-from cProfile import label
 import sys
 import pandas as pd
 import numpy as np
@@ -686,6 +685,17 @@ class MultinomialField(LabelGenerator):
         lbls = self._mfc(item)
         lbls = [l.replace('_PAIR', '') for l in lbls]
         return lbls
+
+    def merge(self, generators: list['MultinomialField']) -> None:
+        """
+        Merge multiple MultinomialField instances into this one using the inner MultinomialFieldCombiner's merge method.
+        :param generators: List of MultinomialField instances to merge.
+        """
+        combiners_to_merge = []
+        for gen in generators:
+            if isinstance(gen, MultinomialField):
+                combiners_to_merge.append(gen._mfc)
+        self._mfc.merge(combiners_to_merge)
 
     @staticmethod
     def from_pretrained(pretrained: str) -> LabelGenerator:

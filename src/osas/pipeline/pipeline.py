@@ -25,7 +25,18 @@ sys.path.append('')
 from osas.pipeline.groom_data import GroomData
 from osas.data.datasources import CSVDataSource, Datasource
 from osas.pipeline.detect_anomalies import DetectAnomalies
+from osas.data.datasources import PySparkDataSource
 import json
+from collections.abc import Iterator
+
+try:
+    from pyspark.sql.functions import pandas_udf, struct, lit
+    from pyspark.sql.types import StructType, StructField, StringType, ArrayType, BinaryType, IntegerType, DoubleType
+    from pyspark.sql import functions as F
+    import pandas as pd
+    import pickle
+except ImportError:
+    pass
 
 
 class Pipeline:
@@ -97,9 +108,12 @@ class Pipeline:
         self._pipeline = []
         final_model = {'model': {}}
         index = 0
+
+        gen_sect = []
         for sect in self.config:
             print('\t::{0}'.format(sect))
             if 'generator_type' in self.config[sect]:
+                gen_sect.append(sect)
                 for key in self.config[sect]:
                     print("\t\t::{0} = {1}".format(key, self.config[sect][key]))
                 if incremental:
@@ -107,23 +121,63 @@ class Pipeline:
                 else:
                     lg = gd.label_generator(self.config[sect]['generator_type'], self.config[sect])
                 index += 1
-                print("\t\t::OBJECT: {0}".format(lg))
-                sys.stdout.write('\t\t::BUILDING MODEL...')
-                sys.stdout.flush()
-                lg_model = gd.build_model(lg, dataset, count_column=self._count_column)
-                final_model['model'][sect] = lg_model
-                sys.stdout.write('done\n')
+                if not isinstance(dataset, PySparkDataSource):
+                    print("\t\t::OBJECT: {0}".format(lg))
+                    sys.stdout.write('\t\t::BUILDING MODEL...')
+                    sys.stdout.flush()
+                    lg_model = gd.build_model(lg, dataset, count_column=self._count_column)
+                    final_model['model'][sect] = lg_model
+                    sys.stdout.write('done\n')
                 self._pipeline.append(lg)
-        # remove anomaly detection update (not all models support incremental because of sklearn dependencies)
-        # if incremental:
-        #     final_model['scoring'] = self._detect_anomalies
-        #     return final_model
+
+        if isinstance(dataset, PySparkDataSource):
+
+            broadcasted_pipeline = dataset.get_dataframe.sparkSession.sparkContext.broadcast(self._pipeline)
+            broadcasted_gd = dataset.get_dataframe.sparkSession.sparkContext.broadcast(gd)
+            broadcasted_count_column = dataset.get_dataframe.sparkSession.sparkContext.broadcast(self._count_column)
+            
+            schema = StructType([
+                StructField("lg_index", IntegerType(), nullable=False),
+                StructField("model_data", BinaryType(), nullable=False)
+            ])
+
+            def train_pipeline_on_partition(pdf_iter: Iterator[pd.DataFrame]):
+                pipeline = broadcasted_pipeline.value
+                gd = broadcasted_gd.value
+                count_column = broadcasted_count_column.value
+                for pdf in pdf_iter:
+                    rows = []
+                    for idx, lg in enumerate(pipeline):
+                        ds = CSVDataSource(data=pdf)
+                        model = gd.from_pretrained(lg.__class__.__name__, gd.build_model(lg, ds, count_column=count_column))
+                        rows.append({"lg_index": idx, "model_data": pickle.dumps(model)})
+                    yield pd.DataFrame(rows)
+
+
+            models_df = dataset.get_dataframe.mapInPandas(train_pipeline_on_partition, schema=schema)
+            grouped = models_df.groupBy("lg_index").agg(F.collect_list("model_data").alias("partition_models"))
+            partition_models = grouped.collect()
+
+            final_models = {}
+
+            pipeline = []
+            for (row, sect) in zip(partition_models, gen_sect):
+                lg_index = row["lg_index"]
+                pickled_models_for_lg = row["partition_models"]  # list of binary blobs
+                models_for_lg = [pickle.loads(model) for model in pickled_models_for_lg]
+                final_model['model'][sect], model = gd.merge_models(models_for_lg)
+                pipeline.append(model)
+            self._pipeline = pipeline
 
         self(dataset, dest_field_labels='_labels')
         da = DetectAnomalies()
         if not incremental:
             self._detect_anomalies = da.detection_model(self.config['AnomalyScoring']['scoring_algorithm'],
                                                         load_config=False)
+
+        if isinstance(dataset, PySparkDataSource):
+            dataset = CSVDataSource(data=dataset.get_dataframe.select('_labels').toPandas())
+
         # check for classifier scoring and if so, add grouth truth column and classifier as param
         if self.config['AnomalyScoring']['scoring_algorithm'] == 'SupervisedClassifierAnomaly':
             ground_truth_column = self.config['AnomalyScoring']['ground_truth_column']
@@ -142,31 +196,57 @@ class Pipeline:
                     pass
             # build model
             scoring_model = self._detect_anomalies.build_model(dataset,
-                                                               ground_truth_column,
-                                                               classifier,
-                                                               init_args,
-                                                               incremental=incremental)
+                                                                ground_truth_column,
+                                                                classifier,
+                                                                init_args,
+                                                                incremental=incremental)
         else:
             scoring_model = self._detect_anomalies.build_model(dataset, incremental=incremental)
         final_model['scoring'] = scoring_model
         return final_model
 
     def __call__(self, dataset: Datasource, dest_field_labels='labels', dest_field_score='score'):
+        if isinstance(dataset, PySparkDataSource):
+            df = dataset.get_dataframe
+            broadcasted_pipeline = df.sparkSession.sparkContext.broadcast(self._pipeline)
 
-        def process_item(item):
-            label_list = []
-            for lg in self._pipeline:
-                llist = lg(item)
-                for label in llist:
-                    label_list.append(label)
-            return label_list
+            @pandas_udf(ArrayType(StringType()))
+            def process_partition(pdf):
+                pipeline = broadcasted_pipeline.value
+                return pdf.apply(
+                    lambda row: [label for lg in pipeline for label in lg(row.to_dict())],
+                    axis=1
+                )
+            cols = df.columns
+            dataset.with_column(dest_field_labels, process_partition(struct(*cols)))
+            dataset.with_column('_labels', process_partition(struct(*cols)))
+        else:
+            all_labels = dataset.apply(lambda item: [label for lg in self._pipeline for label in lg(item)], axis=1)
+            dataset[dest_field_labels] = all_labels
+            dataset['_labels'] = all_labels
+            
+        if self._detect_anomalies is None:
+            return
+        
+        if isinstance(dataset, PySparkDataSource):
+            broadcasted_detect_anomalies = dataset.get_dataframe.sparkSession.sparkContext.broadcast(self._detect_anomalies)
+            schema = dataset.get_dataframe.schema
+            schema = schema.add(StructField(dest_field_score, DoubleType(), nullable=True))
+            def process_partition(pdf_iter: Iterator[pd.DataFrame]):
+                detect_anomalies = broadcasted_detect_anomalies.value
+                for pdf in pdf_iter:
+                    pdf[dest_field_score] = detect_anomalies(CSVDataSource(data=pdf))
+                    yield pdf
 
-        all_labels = dataset.apply(process_item, axis=1)
-        dataset[dest_field_labels] = all_labels
-        dataset['_labels'] = all_labels
-        if self._detect_anomalies is not None:
-            scores = self._detect_anomalies(dataset)
-            dataset[dest_field_score] = scores
+
+
+            scored_df = dataset.get_dataframe.withColumn(dest_field_score, lit(None).cast("double")).mapInPandas(process_partition, schema=schema)
+            print(scored_df)
+            dataset.set_dataframe(scored_df)
+            return
+
+        scores = self._detect_anomalies(dataset)
+        dataset[dest_field_score] = scores
 
 
 if __name__ == '__main__':
