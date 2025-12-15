@@ -188,7 +188,6 @@ if _HAS_PYSPARK:
             else:
                 self._data = spark_df
 
-
         def __len__(self):
             return self._data.count()
 
