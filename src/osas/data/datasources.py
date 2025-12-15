@@ -23,7 +23,6 @@ import threading
 
 import pandas as pd
 import numbers
-import numpy as np
 
 sys.path.append('')
 
@@ -36,7 +35,7 @@ try:
     from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
     from pyspark.sql import functions as F
     from pyspark.sql.types import *
-    from pyspark.sql.functions import udf, pandas_udf, PandasUDFType, lit, array
+    from pyspark.sql.functions import udf
     from pyspark.sql.window import Window
 
     _HAS_PYSPARK = True
@@ -87,13 +86,9 @@ class CSVDataColumn(DataColumn):
 
 class CSVDataSource(Datasource):
 
-    def __init__(self, filename=None, data=None):
-        if filename is not None:
-            self._data = pd.read_csv(filename)
-        elif data is not None:
-            self._data = data
-        else:
-            raise ValueError("Provide either filename or data")
+    def __init__(self, filename: str):
+        super().__init__()
+        self._data = pd.read_csv(filename)
 
     def __len__(self):
         return len(self._data)
@@ -125,10 +120,6 @@ class CSVDataSource(Datasource):
 
     def groupby(self, column_name: str, func):
         return self._data.groupby(column_name).agg(func).to_dict()
-
-    def with_column(self, col_name, col):
-        self._data[col_name] = col
-        return self
 
 
 if _HAS_PYSPARK:
@@ -188,15 +179,54 @@ if _HAS_PYSPARK:
             else:
                 self._data = spark_df
 
+            # Cache the DataFrame for better performance
+            self._data.cache()
+
+            # Add a unique identifier column for efficient row access
+            # Use row_number() to ensure sequential IDs starting from 1
+            window = Window.orderBy(F.monotonically_increasing_id())
+            self._data = self._data.withColumn("_row_id", F.row_number().over(window) - 1)
+
+            # Optimize partitions based on data size
+            num_partitions = min(10, max(1, self._data.count() // 1000))
+            if self._data.rdd.getNumPartitions() > num_partitions:
+                self._data = self._data.repartition(num_partitions)
+
         def __len__(self):
             return self._data.count()
 
         def __getitem__(self, item: Any):
+            # Single-row access by integer index - using direct filtering on _row_id
+            if isinstance(item, numbers.Integral):
+                warnings.warn(
+                    "Accessing PySpark Datasource by index is not optimized. Consider using apply instead.",
+                    UserWarning,
+                    stacklevel=2
+                )
+                return (
+                    self._data
+                    .filter(F.col("_row_id") == item)
+                    .drop("_row_id")
+                    .first()
+                    .asDict()
+                )
+
+            # Slice access: start:stop:step - using direct filtering on _row_id
+            elif isinstance(item, slice):
+                start, stop, step = item.indices(self.__len__())
+                return (
+                           self._data
+                           .filter((F.col("_row_id") >= start) & (F.col("_row_id") < stop))
+                           .drop("_row_id")
+                           .collect()
+                       )[::step]
+
             # Column access by name
-            if isinstance(item, str):
+            elif isinstance(item, str):
                 return PySparkDataColumn(self._data.select(item))
 
-            raise NotImplementedError(f"Unsupported index type for PySparkDataSource: {type(item)}")
+            else:
+                raise NotImplementedError(f"Unsupported index type: {type(item)}")
 
         @classmethod
         def cleanup(cls):
@@ -206,29 +236,14 @@ if _HAS_PYSPARK:
                 cls._spark_session = None
 
         @staticmethod
-        def convert_to_python_type(val):
-            """Convert numpy types to native Python types."""
-            if isinstance(val, np.integer):
-                return int(val)
-            elif isinstance(val, np.floating):
-                return float(val)
-            elif isinstance(val, np.bool_):
-                return bool(val)
-            elif isinstance(val, np.ndarray):
-                return val.tolist()
-            elif isinstance(val, list):
-                return [PySparkDataSource.convert_to_python_type(v) for v in val]
-            else:
-                return val
-
-        @staticmethod
-        def infer_type(val):     
-            if isinstance(val, bool):
-                return BooleanType()
-            elif isinstance(val, int):
+        def infer_type(val):
+            """Infer PySpark type from a value."""
+            if isinstance(val, int):
                 return IntegerType()
             elif isinstance(val, float):
                 return DoubleType()
+            elif isinstance(val, bool):
+                return BooleanType()
             elif isinstance(val, str):
                 return StringType()
             elif isinstance(val, list):
@@ -240,7 +255,24 @@ if _HAS_PYSPARK:
                 raise TypeError(f"Unsupported type: {type(val)}")
 
         def __setitem__(self, key: str, value: list):
-            raise NotImplementedError("Setting items by index is not supported for PySparkDataSource.")
+            dtype = self.infer_type(value[0])
+            if key in self._data.columns:
+                self._data = self._data.drop(key)
+
+            if dtype == DoubleType():
+                value = [float(v) for v in value]
+
+            # Create a new DataFrame with the new column
+            new_df = self._data.sparkSession.createDataFrame(
+                [(i, v) for i, v in enumerate(value)],
+                ["_row_id", key]
+            )
+
+            # Join with the original DataFrame
+            self._data = (
+                self._data
+                .join(new_df, on="_row_id")
+            )
 
         def apply(self, func, axis: int = 0) -> Any:
             return self._data.rdd.map(func).collect()
@@ -275,19 +307,6 @@ if _HAS_PYSPARK:
 
         def groupby(self, column_name: str, func):
             return self._data.groupBy(column_name).agg(func).collect()
-
-        def with_column(self, col_name, col):
-            self._data = self._data.withColumn(col_name, col)
-            return self
-
-        @property
-        def get_dataframe(self):
-            return self._data
-
-        @property
-        def set_dataframe(self, dataframe: SparkDataFrame):
-            self._data = dataframe
-            return self
 
 
     class PySparkDataColumn(DataColumn):
@@ -329,10 +348,16 @@ if _HAS_PYSPARK:
             return self._data.count()
 
         def __getitem__(self, index: int) -> dict:
-            raise NotImplementedError("Getting items by index is not supported for PySparkDataColumn.")
+            return (
+                self._data
+                .filter(F.col("_row_id") == index)
+                .select(self._col_name)
+                .first()[0]
+            )
 
         def __setitem__(self, index: int, value: Any) -> None:
-            raise NotImplementedError("Setting items by index is not supported for PySparkDataColumn.")
+            raise NotImplementedError("Setting items by index is not supported.")
+
 else:
     class PySparkDataSource:
         def __init__(self, *args, **kwargs):

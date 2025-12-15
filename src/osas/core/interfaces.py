@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Any
+from typing import Union, Any
 from abc import abstractmethod
 
 
@@ -191,15 +191,6 @@ class LabelGenerator:
         """
         :param pretrained: dictionary holding pretrained model
         :return: New instance
-        """
-        pass
-    
-    @abstractmethod
-    def merge(self, model: 'LabelGenerator') -> None:
-        """
-        Merge the model with the current model
-        :param model: the model to merge
-        :return: None
         """
         pass
 
