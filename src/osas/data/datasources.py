@@ -1,0 +1,362 @@
+#
+# Authors: Security Intelligence Team within the Security Coordination Center
+#
+# Copyright (c) 2018 Adobe Systems Incorporated. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+import sys
+from typing import Any, Union
+import warnings
+import threading
+
+import pandas as pd
+import numbers
+import numpy as np
+
+sys.path.append('')
+
+from osas.core.interfaces import Datasource, DataColumn
+
+try:
+    import os
+
+    os.environ['PYARROW_IGNORE_TIMEZONE'] = '1'
+    from pyspark.sql import DataFrame as SparkDataFrame, SparkSession
+    from pyspark.sql import functions as F
+    from pyspark.sql.types import *
+    from pyspark.sql.functions import udf, pandas_udf, PandasUDFType, lit, array
+    from pyspark.sql.window import Window
+
+    _HAS_PYSPARK = True
+except ImportError as e:
+    print(e)
+    SparkDataFrame = SparkSession = None
+    _HAS_PYSPARK = False
+
+
+class CSVDataColumn(DataColumn):
+    def __init__(self, data: pd.DataFrame):
+        super(CSVDataColumn, self).__init__()
+        self._data = data
+
+    def mean(self) -> float:
+        return self._data.mean()
+
+    def std(self) -> float:
+        return self._data.std()
+
+    def min(self) -> any:
+        return self._data.min()
+
+    def max(self) -> any:
+        return self._data.max()
+
+    def unique(self) -> list:
+        return pd.unique(self._data)
+
+    def value_counts(self) -> dict:
+        return self._data.value_counts()
+
+    def tolist(self) -> list:
+        return list(self._data)
+
+    def apply(self, func) -> int:
+        self._data.apply(func)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __getitem__(self, index: int) -> dict:
+        return self._data[index]
+
+    def __setitem__(self, index: int, value: Any) -> dict:
+        self._data.iloc[index] = value
+
+
+class CSVDataSource(Datasource):
+
+    def __init__(self, filename=None, data=None):
+        if filename is not None:
+            self._data = pd.read_csv(filename)
+        elif data is not None:
+            self._data = data
+        else:
+            raise ValueError("Provide either filename or data")
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, item: int):
+        if isinstance(item, numbers.Integral):
+            return self._data.iloc[item].to_dict()
+        elif isinstance(item, slice):
+            rez = []
+            for ii in range(item.start or 0, item.stop or len(self), item.step or 1):
+                rez.append(self._data.iloc[ii].to_dict())
+            return rez
+        elif isinstance(item, str):
+            return CSVDataColumn(self._data[item])
+        else:
+            raise NotImplemented
+
+    def __setitem__(self, key: str, value: any):
+        self._data[key] = value
+
+    def apply(self, func, axis: int = 0) -> int:
+        return self._data.apply(lambda row: func(row.to_dict()), axis=axis)
+
+    def save(self, file_handle, append=False) -> None:
+        if append:
+            self._data.to_csv(file_handle, mode='a', header=False, index=False)
+        else:
+            self._data.to_csv(file_handle)
+
+    def groupby(self, column_name: str, func):
+        return self._data.groupby(column_name).agg(func).to_dict()
+
+    def with_column(self, col_name, col):
+        self._data[col_name] = col
+        return self
+
+
+if _HAS_PYSPARK:
+    class PySparkDataSource(Datasource):
+        _spark_session = None
+        _lock = threading.Lock()
+
+        @classmethod
+        def get_or_create_spark_session(cls, spark_conf_path: str = None):
+            with cls._lock:
+                if cls._spark_session is None:
+                    if spark_conf_path:
+                        import configparser
+                        config = configparser.ConfigParser()
+                        config.read(spark_conf_path)
+                        builder = SparkSession.builder
+
+                        for key, value in config.items('spark'):
+                            builder = builder.config(key, value)
+                        cls._spark_session = builder.getOrCreate()
+                        return cls._spark_session
+
+                    cls._spark_session = (
+                        SparkSession.builder
+                        .appName("OSAS")
+                        .config("spark.sql.shuffle.partitions", "10")
+                        .config("spark.default.parallelism", "10")
+                        .config("spark.memory.fraction", "0.8")
+                        .config("spark.memory.storageFraction", "0.3")
+                        .master("local[*]")
+                        .getOrCreate()
+                    )
+
+                return cls._spark_session
+
+        def __init__(self, spark_df: Union[SparkDataFrame, str] = None, spark_conf_path=None,
+                     **options):
+            super().__init__()
+            if spark_df is None:
+                raise ValueError("A spark dataframe or csv file must be provided.")
+
+            self._spark = self.get_or_create_spark_session(spark_conf_path)
+            if isinstance(spark_df, str):
+                if spark_df.endswith(".csv"):
+                    # Read CSV file with optimized settings
+                    self._data = (
+                        self._spark.read
+                        .option("inferSchema", "true")
+                        .option("header", "true")
+                        .option("maxColumns", "10000")
+                        .option("maxCharsPerColumn", "10000")
+                        .csv(spark_df, **options)
+                    )
+                else:
+                    # This is a spark table
+                    self._data = self._spark.table(spark_df)
+            else:
+                self._data = spark_df
+
+
+        def __len__(self):
+            return self._data.count()
+
+        def __getitem__(self, item: Any):
+            # Column access by name
+            if isinstance(item, str):
+                return PySparkDataColumn(self._data.select(item))
+
+            raise NotImplementedError(f"Unsupported index type for PySparkDataSource: {type(item)}")
+
+        @classmethod
+        def cleanup(cls):
+            # Cleanup method to stop the SparkSession
+            if cls._spark_session is not None:
+                cls._spark_session.stop()
+                cls._spark_session = None
+
+        @staticmethod
+        def convert_to_python_type(val):
+            """Convert numpy types to native Python types."""
+            if isinstance(val, np.integer):
+                return int(val)
+            elif isinstance(val, np.floating):
+                return float(val)
+            elif isinstance(val, np.bool_):
+                return bool(val)
+            elif isinstance(val, np.ndarray):
+                return val.tolist()
+            elif isinstance(val, list):
+                return [PySparkDataSource.convert_to_python_type(v) for v in val]
+            else:
+                return val
+
+        @staticmethod
+        def infer_type(val):     
+            if isinstance(val, bool):
+                return BooleanType()
+            elif isinstance(val, int):
+                return IntegerType()
+            elif isinstance(val, float):
+                return DoubleType()
+            elif isinstance(val, str):
+                return StringType()
+            elif isinstance(val, list):
+                if len(val) == 0:
+                    return ArrayType(StringType(), True)
+                element_type = PySparkDataSource.infer_type(val[0])
+                return ArrayType(element_type, True)
+            else:
+                raise TypeError(f"Unsupported type: {type(val)}")
+
+        def __setitem__(self, key: str, value: list):
+            raise NotImplementedError("Setting items by index is not supported for PySparkDataSource.")
+
+        def apply(self, func, axis: int = 0) -> Any:
+            return self._data.rdd.map(func).collect()
+
+        def save(self, file, append=False) -> None:
+            save_data = self._data
+            for col in save_data.columns:
+                if isinstance(save_data.schema[col].dataType, ArrayType):
+                    # Convert ArrayType column to string
+                    save_data = save_data.withColumn(col, F.col(col).cast("string"))
+
+            if isinstance(file, str):
+                if file.endswith(".csv"):
+                    # Save to CSV
+                    save_data.toPandas().to_csv(file, index=False)
+                else:
+                    # Save to Spark table
+                    if append:
+                        save_data.write.mode("append").option("mergeSchema", "true").option("overwriteSchema", "true").saveAsTable(file)
+                    else:
+                        save_data.write.mode("overwrite").option("mergeSchema", "true").option("overwriteSchema", "true").saveAsTable(file)
+            elif hasattr(file, "write"):
+                data = self._data.coalesce(1)
+                header = ",".join(data.columns) + "\n"
+                file.write(header)
+                rows = data.collect()
+                for row in rows:
+                    line = ",".join(map(str, row)) + "\n"
+                    file.write(line)
+            else:
+                raise ValueError("File handle must be a string or a file-like object.")
+
+        def groupby(self, column_name: str, func):
+            return self._data.groupBy(column_name).agg(func).collect()
+
+        def with_column(self, col_name, col):
+            self._data = self._data.withColumn(col_name, col)
+            return self
+
+        @property
+        def get_dataframe(self):
+            return self._data
+
+        def set_dataframe(self, dataframe: SparkDataFrame):
+            self._data = dataframe
+            return self
+
+
+    class PySparkDataColumn(DataColumn):
+        def __init__(self, dataframe: SparkDataFrame):
+            super(PySparkDataColumn, self).__init__()
+            self._data = dataframe
+            self._col_name = dataframe.columns[0]
+
+        def mean(self) -> float:
+            return float(self._data.select(F.mean(self._col_name)).first()[0])
+
+        def std(self) -> float:
+            return float(self._data.select(F.stddev(self._col_name)).first()[0])
+
+        def min(self) -> Any:
+            return self._data.select(F.min(self._col_name)).first()[0]
+
+        def max(self) -> Any:
+            return self._data.select(F.max(self._col_name)).first()[0]
+
+        def unique(self) -> list[any]:
+            return [row[0] for row in self._data.select(self._col_name).distinct().collect()]
+
+        def value_counts(self) -> dict:
+            return dict(
+                self._data
+                .groupBy(self._col_name)
+                .count()
+                .collect()
+            )
+
+        def tolist(self) -> list[any]:
+            return [row[0] for row in self._data.select(self._col_name).collect()]
+
+        def apply(self, func) -> any:
+            pass
+
+        def __len__(self) -> int:
+            return self._data.count()
+
+        def __getitem__(self, index: int) -> dict:
+            raise NotImplementedError("Getting items by index is not supported for PySparkDataColumn.")
+
+        def __setitem__(self, index: int, value: Any) -> None:
+            raise NotImplementedError("Setting items by index is not supported for PySparkDataColumn.")
+else:
+    class PySparkDataSource:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PySpark is not installed. Please install with: pip install your-package[pyspark]")
+
+
+    class PySparkDataColumn:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PySpark is not installed. Please install with: pip install your-package[pyspark]")
+
+if __name__ == '__main__':
+    tmp = CSVDataSource('corpus/test.csv')
+    print(tmp[:10])
+    cnt = 0
+
+    for item in tmp:
+        cnt += 1
+        print(item)
+        if cnt == 10:
+            break
+
+    if _HAS_PYSPARK:
+        tmp = PySparkDataSource('corpus/test.csv')
+        import gzip
+
+        with gzip.open('corpus/test2.csv.gz', 'wt', encoding='utf-8') as f:
+            tmp.save(f)

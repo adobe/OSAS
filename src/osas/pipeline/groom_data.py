@@ -95,6 +95,13 @@ class GroomData():
                    input_object: dict) -> [str]:
         return model.__call__(input_object)
 
+    def merge_models(self, models: list[LabelGenerator]) -> dict:
+        root_model = models[0]
+        root_model.merge(models[1:])
+        if hasattr(root_model, '_mfc'):
+            return root_model._mfc._model, root_model
+        return root_model._model, root_model
+
     def get_pretrained_model(self, modelName: str,
                              pretrained_data: str) -> LabelGenerator:
         lgClass = getattr(sys.modules[label_generators.__name__],

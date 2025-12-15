@@ -83,7 +83,7 @@ class CSVDataSource(Config):
 
 @dataclass
 class CSVDataColumn(Config):
-    data: pd.DataFrame = field(default=pd.DataFrame())
+    data: pd.DataFrame = field(default=pd.DataFrame.empty)
 
 
 # Label Generator dataclasses

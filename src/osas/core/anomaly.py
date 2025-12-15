@@ -31,6 +31,7 @@ import importlib
 
 sys.path.append('')
 from osas.core.interfaces import AnomalyDetection, Datasource
+from collections import Counter
 
 
 class IFAnomaly(AnomalyDetection):
@@ -46,9 +47,8 @@ class IFAnomaly(AnomalyDetection):
 
     def build_model(self, dataset: Datasource, incremental=False) -> dict:
         data_encoder = MultiLabelBinarizer()
-        labels = []
-        for item in dataset:
-            labels.append(item['_labels'])
+        labels = dataset.apply(lambda item: item['_labels'], axis=1)
+
         data_encoded = data_encoder.fit_transform(labels)
         self._data_encoder = data_encoder
 
@@ -71,9 +71,7 @@ class IFAnomaly(AnomalyDetection):
 
     def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
-        labels = []
-        for item in dataset:
-            labels.append(item['_labels'])
+        labels = dataset.apply(lambda item: item['_labels'])
         data_encoded = self._data_encoder.transform(labels)
         data_decomposed = self._decompose.transform(data_encoded)
         scores = self._model.score_samples(data_decomposed)
@@ -105,9 +103,8 @@ class LOFAnomaly(AnomalyDetection):
 
     def build_model(self, dataset: Datasource, incremental=False) -> dict:
         data_encoder = MultiLabelBinarizer()
-        labels = []
-        for item in dataset:
-            labels.append(item['_labels'])
+        labels = dataset.apply(lambda item: item['_labels'], axis=1)
+
         data_encoded = data_encoder.fit_transform(labels)
         self._data_encoder = data_encoder
 
@@ -131,9 +128,7 @@ class LOFAnomaly(AnomalyDetection):
 
     def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
-        labels = []
-        for item in dataset:
-            labels.append(item['_labels'])
+        labels = dataset.apply(lambda item: item['_labels'], axis=1)
         data_encoded = self._data_encoder.transform(labels)
         data_decomposed = self._decompose.transform(data_encoded)
         scores = self._model.score_samples(data_decomposed)
@@ -163,15 +158,7 @@ class SVDAnomaly(AnomalyDetection):
         self._model = None
 
     def build_model(self, dataset: Datasource, incremental=False) -> dict:
-
-        labels = []
-        for item in dataset:
-            tmp = []
-            for label in item['_labels']:
-                if isinstance(label, str):
-                    tmp.append(label)
-            labels.append(tmp)
-
+        labels = dataset.apply(lambda item: [label for label in item['_labels'] if isinstance(label, str)], axis=1)
         if not incremental:
             data_encoder = MultiLabelBinarizer()
             data_encoded = data_encoder.fit_transform(labels)
@@ -197,9 +184,7 @@ class SVDAnomaly(AnomalyDetection):
 
     def __call__(self, dataset: Datasource, verbose=True) -> [float]:
 
-        labels = []
-        for item in dataset:
-            labels.append(item['_labels'])
+        labels = dataset.apply(lambda item: item['_labels'], axis=1)
         data_encoded = self._data_encoder.transform(labels)
         data_decomposed = self._model.transform(data_encoded)
         data_reconstruct = self._model.inverse_transform(data_decomposed)
@@ -230,6 +215,36 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         super().__init__()
         self._model = None
 
+    def process_item(self, item):
+
+        local_counts = {
+            '1': Counter(),
+            '2': Counter(),
+            '3': Counter(),
+            'totals': {'1': 0, '2': 0, '3': 0}
+        }
+
+        tags = item['_labels']
+        string_tags = []
+        for tag in tags:
+            try:
+                tag = float(tag)
+                continue
+            except ValueError as e:
+                if 'string' in str(e):
+                    string_tags.append(tag)
+
+        tags = string_tags
+        tags = list(sorted(tags))
+
+        for gram_type in ['1', '2', '3']:
+            for tag in tags:
+                key = f"({tag})"
+                local_counts[gram_type][key] += 1
+                local_counts['totals'][gram_type] += 1
+
+        return local_counts
+
     def build_model(self, dataset: Datasource, incremental=False) -> dict:
         if not incremental:
             model = {
@@ -240,48 +255,16 @@ class StatisticalNGramAnomaly(AnomalyDetection):
         else:
             model = self._model
         # for clarity, this code is written explicitly
-        for item in tqdm.tqdm(dataset, ncols=100, desc="\tbuilding model"):
-            tags = item['_labels']
-            string_tags = []
-            for tag in tags:
-                if isinstance(tag, str):
-                    string_tags.append(tag)
-            tags = string_tags
-            tags = list(sorted(tags))
-            # unigrams
-            grams = model['1']
-            for ii in range(len(tags)):
-                key = '(' + str(tags[ii]) + ')'
-                if key in grams:
-                    grams[key]['COUNT'] += 1
-                else:
-                    grams[key] = {'COUNT': 1}
-                grams['TOTAL'] += 1
 
-            # bigrams
-            grams = model['2']
+        results = dataset.apply(self.process_item, axis=1)
+        for result in results:
+            for gram_size in ['1', '2', '3']:
+                for (key, cnt) in result[gram_size].items():
+                    if key not in model[gram_size]:
+                        model[gram_size][key] = {'COUNT': 0, 'PROB': 0, 'NEG_LOG_PROB': 0}
+                    model[gram_size][key]['COUNT'] += cnt
 
-            for ii in range(len(tags) - 1):
-                for jj in range(ii + 1, len(tags)):
-                    key = '(' + str(tags[ii]) + ',' + str(tags[jj]) + ')'
-                    if key in grams:
-                        grams[key]['COUNT'] += 1
-                    else:
-                        grams[key] = {'COUNT': 1}
-                    grams['TOTAL'] += 1
-
-            # trigrams
-            grams = model['3']
-
-            for ii in range(len(tags) - 2):
-                for jj in range(ii + 1, len(tags) - 1):
-                    for kk in range(jj + 1, len(tags)):
-                        key = '(' + str(tags[ii]) + ',' + str(tags[jj]) + ',' + str(tags[kk]) + ')'
-                        if key in grams:
-                            grams[key]['COUNT'] += 1
-                        else:
-                            grams[key] = {'COUNT': 1}
-                        grams['TOTAL'] += 1
+                model[gram_size]['TOTAL'] += result['totals'][gram_size]
 
         # convert to probs and log-probs
         for g in ['1', '2', '3']:
@@ -327,10 +310,10 @@ class StatisticalNGramAnomaly(AnomalyDetection):
                 new_feats.append(mid)
             return new_feats, perp_score
 
-        def _compute_score(ngram2score, tags, handle_unseen=True):
+        def _compute_score(ngram2score, tags, handle_unseen=True) -> float:
             feats, perp_score = _build_feats(tags)
 
-            score = 0
+            score = 0.0
             for feat in feats:
                 found = False
                 if feat in ngram2score['1']:
@@ -348,14 +331,8 @@ class StatisticalNGramAnomaly(AnomalyDetection):
                         score += -math.log(1e-8)
             return score + perp_score
 
-        scores = []
-        if verbose:
-            pgb = tqdm.tqdm(dataset, ncols=100, desc="\tscoring data")
-        else:
-            pgb = dataset
-        for item in pgb:
-            scores.append(_compute_score(self._model, item['_labels']))
-
+        print('Computing anomaly scores')
+        scores = dataset.apply(lambda x: _compute_score(self._model, x['_labels']), axis=1)
         return scores
 
     @staticmethod
@@ -383,11 +360,10 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
 
     def build_model(self, dataset: Datasource, ground_truth_column: str, classifier: str, init_args: dict,
                     incremental=False) -> dict:
-        labels = []
-        ground_truth_values = set()
-        for item in dataset:
-            labels.append(item['_labels'])
-            ground_truth_values.add(item[ground_truth_column])
+
+        labels = dataset.apply(lambda item: item['_labels'], axis=1)
+        ground_truth_values = set(dataset.apply(lambda item: item[ground_truth_column], axis=1))
+
         if not incremental:
             encoder = MultiLabelBinarizer()
             labels_enc = encoder.fit_transform(labels)
@@ -413,10 +389,8 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         ground_truth_to_ind = dict()
         for i in range(len(ind_to_ground_truth)):
             ground_truth_to_ind[ind_to_ground_truth[i]] = i
-        model_ground_truths = []
-        for item in dataset:
-            gt = item[ground_truth_column]
-            model_ground_truths.append(ground_truth_to_ind[gt])
+
+        model_ground_truths = dataset.apply(lambda item: ground_truth_to_ind[item[ground_truth_column]], axis=1)
 
         # get the classifier
         if not incremental:
@@ -449,9 +423,7 @@ class SupervisedClassifierAnomaly(AnomalyDetection):
         return model
 
     def __call__(self, dataset: Datasource, verbose=True) -> [float]:
-        labels = []
-        for item in dataset:
-            labels.append(item['_labels'])
+        labels = dataset.apply(lambda item: item['_labels'], axis=1)
         labels_enc = self._encoder.transform(labels)
 
         preds = self._model.predict_proba(labels_enc)

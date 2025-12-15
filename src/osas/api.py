@@ -7,9 +7,9 @@ import time
 
 sys.path.append('')
 
-from src.osas.pipeline import Pipeline
-from src.osas.pipeline import DetectAnomalies
-from src.osas.pipeline import GroomData
+from osas.pipeline.pipeline import Pipeline
+from osas.pipeline.detect_anomalies import DetectAnomalies
+from osas.pipeline.groom_data import GroomData
 
 
 class OSASConfig:
@@ -108,20 +108,36 @@ class OSAS:
         else:
             return osas_instances[total_hash]
 
-    def __call__(self, row_dict: dict):
-        label_list = []
-        for lg in self._pipeline:
-            llist = lg(row_dict)
-            for label in llist:
-                label_list.append(label)
-        # create a dummy entry
+    def __call__(self, row_dict_or_datasource):
+        if isinstance(row_dict_or_datasource, dict):
+            label_list = []
+            for lg in self._pipeline:
+                llist = lg(row_dict_or_datasource)
+                for label in llist:
+                    label_list.append(label)
+            # create a dummy entry
 
-        dummy_ds = [{'_labels': label_list}]
-        score = self._detect_anomalies(dummy_ds, verbose=False)
-        return {
-            'labels': label_list,
-            'score': score
-        }
+            dummy_ds = [{'_labels': label_list}]
+            score = self._detect_anomalies(dummy_ds, verbose=False)
+            return {
+                'labels': label_list,
+                'score': score
+            }
+        else:
+            def process_item(item):
+                label_list = []
+                for lg in self._pipeline:
+                    llist = lg(item)
+                    for label in llist:
+                        label_list.append(label)
+                return label_list
+
+            all_labels = row_dict_or_datasource.apply(process_item, axis=1)
+            # row_dict_or_datasource['labels'] = all_labels
+            row_dict_or_datasource['_labels'] = all_labels
+            # if self._detect_anomalies is not None:
+            #     scores = self._detect_anomalies(row_dict_or_datasource)
+            #     dataset['_scores'] = scores
 
 
 if __name__ == '__main__':

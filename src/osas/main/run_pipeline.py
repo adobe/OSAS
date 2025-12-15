@@ -18,13 +18,12 @@
 
 import optparse
 import sys
-import json
 from elasticsearch import helpers, Elasticsearch
 
 sys.path.append('')
 
-from src.osas.pipeline import Pipeline
-from osas.data.datasources import CSVDataSource, Datasource
+from osas.pipeline.pipeline import Pipeline
+from osas.data.datasources import CSVDataSource
 import numpy as np
 
 
@@ -33,18 +32,26 @@ def is_numeric(obj):
     return all(hasattr(obj, attr) for attr in attrs)
 
 
-def process(params):
+def run(input_file, conf_file, model_file, output_file, no_elastic=True, spark=False, spark_conf=None, append=False):
     # load and run pipeline
-    datasource = CSVDataSource(params.input_file)
+    if spark:
+        from osas.data.datasources import _HAS_PYSPARK
+        if not _HAS_PYSPARK:
+            datasource = CSVDataSource(input_file)
+        else:
+            from osas.data.datasources import PySparkDataSource
+            datasource = PySparkDataSource(input_file, spark_conf_path=spark_conf)
+    else:
+        datasource = CSVDataSource(input_file)
     p = Pipeline('DEV')
-    p.load_config(params.conf_file)
-    p.load_model(params.model_file)
+    p.load_config(conf_file)
+    p.load_model(model_file)
     p(datasource)
     # save, if necessary
-    if params.output_file:
-        datasource.save(open(params.output_file, 'w'))
+    if output_file:
+        datasource.save(output_file, append=append)
     # push to elasticsearch
-    if not params.no_elastic:
+    if not no_elastic:
         try:
             es = Elasticsearch([{'host': 'localhost', 'port': 9200}], http_auth=('admin', 'admin'))
             data = [item for item in datasource]
@@ -59,6 +66,18 @@ def process(params):
             sys.stdout.write('Unable to push data to ElasticSearch:  {0}\n'.format(str(e)))
 
 
+def process(params):
+    run(
+        input_file=params.input_file,
+        conf_file=params.conf_file,
+        model_file=params.model_file,
+        output_file=params.output_file,
+        no_elastic=params.no_elastic,
+        spark=params.spark,
+        spark_conf=params.spark_conf
+    )
+
+
 if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--input-file', action='store', dest='input_file', help='location of the input file')
@@ -66,6 +85,8 @@ if __name__ == '__main__':
     parser.add_option('--model-file', action='store', dest='model_file', help='location of pretrained pipeline file')
     parser.add_option('--output-file', action='store', dest='output_file', help='output-file (optional)')
     parser.add_option('--no-elastic', action='store_true', dest='no_elastic', help='don\'t push data to Elastic')
+    parser.add_option('--spark', action='store_true', help='use spark for processing')
+    parser.add_option('--spark-conf', action='store', dest='spark_conf', default=None, help='spark configuration file')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:

@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Union, Any
+from typing import Any
 from abc import abstractmethod
 
 
@@ -135,7 +135,7 @@ class Datasource:
         return DatasourceIterator(self)
 
     @abstractmethod
-    def apply(self, func, axis: int = 0) -> int:
+    def apply(self, func, axis: int = 0) -> any:
         """
         Apply lambda function
         :param func: function to apply
@@ -145,12 +145,22 @@ class Datasource:
         pass
 
     @abstractmethod
-    def save(self, file_handle) -> None:
+    def save(self, file_handle, append=False) -> None:
         """
         Save the data into csv format
         :param file_handle: open file handle for writing
+        :param append: append to file if True
         :return: None
         """
+
+    @abstractmethod
+    def groupby(self, column_name: str, agg_func):
+        """
+        Group by a column and aggregate the values
+        :param column_name: column to group by
+        :param agg_func: aggregation function
+        """
+        pass
 
 
 class LabelGenerator:
@@ -181,6 +191,15 @@ class LabelGenerator:
         """
         :param pretrained: dictionary holding pretrained model
         :return: New instance
+        """
+        pass
+    
+    @abstractmethod
+    def merge(self, model: 'LabelGenerator') -> None:
+        """
+        Merge the model with the current model
+        :param model: the model to merge
+        :return: None
         """
         pass
 

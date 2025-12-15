@@ -22,6 +22,7 @@ import inspect
 
 sys.path.append('')
 from osas.data.datasources import CSVDataSource
+from osas.core.interfaces import Datasource
 from osas.core import label_generators
 
 
@@ -81,7 +82,7 @@ def _detect_field_type(datasource, count_column=None):
     return field_type
 
 
-def _get_generators(datasource: CSVDataSource, field_types: dict):
+def _get_generators(datasource: Datasource, field_types: dict):
     generator_list = []
     for key in field_types:
         if field_types[key] == 'int' or field_types[key] == 'float':
@@ -153,7 +154,7 @@ def _write_conf(generators, filename, count_column=None):
     f = open(filename, 'w')
     f.write(HEADER)
     f.write('\n\n')
-    if params.count_column:
+    if count_column:
         f.write('[GENERAL]\n')
         f.write('count_column={0}\n\n'.format(count_column))
     count = 0
@@ -180,11 +181,21 @@ def _write_conf(generators, filename, count_column=None):
     f.close()
 
 
-def process(params):
-    datasource = CSVDataSource(params.input_file)
+def autoconfig(input_file, output_file, count_column=None, spark=False, spark_conf=None):
+    if spark:
+        from osas.data.datasources import _HAS_PYSPARK
+        if not _HAS_PYSPARK:
+            sys.stderr.write('PySpark is not installed. Please install with: pip install osas[pyspark]\n')
+            datasource = CSVDataSource(input_file)
+        else:
+            from osas.data.datasources import PySparkDataSource
+            datasource = PySparkDataSource(input_file, spark_conf_path=spark_conf)
+    else:
+        datasource = CSVDataSource(input_file)
+
     sys.stdout.write('Preprocessing')
-    if params.count_column:
-        cc = params.count_column
+    if count_column:
+        cc = count_column
     else:
         cc = None
     field_type = _detect_field_type(datasource, count_column=cc)
@@ -197,7 +208,17 @@ def process(params):
     for item in generators:
         sys.stdout.write('\t\t{0}: {1}\n'.format(item[0], item[1]))
 
-    _write_conf(generators, params.output_file, count_column=params.count_column)
+    _write_conf(generators, output_file, count_column=count_column)
+
+
+def process(params):
+    autoconfig(
+        input_file=params.input_file,
+        output_file=params.output_file,
+        count_column=params.count_column,
+        spark=params.spark,
+        spark_conf=params.spark_conf
+    )
 
 
 if __name__ == '__main__':
@@ -207,6 +228,8 @@ if __name__ == '__main__':
     parser.add_option('--count-column', action='store', dest='count_column',
                       help='if this value is set, OSAS will consider the data clustered and this column will indicate'
                            'the number of occurrences of the event. Otherwise, this number is considered equal to 1')
+    parser.add_option('--spark', action='store_true', help='use spark for processing')
+    parser.add_option('--spark-conf', action='store', dest='spark_conf', default=None, help='location of spark configuration file')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.output_file:

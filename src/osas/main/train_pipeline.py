@@ -22,8 +22,9 @@ import json
 
 sys.path.append('')
 
-from src.osas.pipeline import Pipeline
-from osas.data.datasources import CSVDataSource, Datasource
+from osas.pipeline.pipeline import Pipeline
+from osas.data.datasources import CSVDataSource
+from osas.core.interfaces import Datasource
 
 
 def is_numeric(obj):
@@ -31,15 +32,35 @@ def is_numeric(obj):
     return all(hasattr(obj, attr) for attr in attrs)
 
 
-def process(params):
+def train(input_file, conf_file, model_file, orig_model_file=None, incremental=False, spark=False, spark_conf=None):
     # load and run pipeline
-    datasource = CSVDataSource(params.input_file)
+    if spark:
+        from osas.data.datasources import _HAS_PYSPARK
+        if not _HAS_PYSPARK:
+            datasource = CSVDataSource(input_file)
+        else:
+            from osas.data.datasources import PySparkDataSource
+            datasource = PySparkDataSource(input_file, spark_conf_path=spark_conf)
+    else:
+        datasource = CSVDataSource(input_file)
     p = Pipeline('DEV')
-    p.load_config(params.conf_file)
-    if params.incremental:
-        p.load_model(params.orig_model_file)
-    model = p.build_pipeline(datasource, incremental=params.incremental)
-    json.dump(model, open(params.model_file, 'w'), indent=4)
+    p.load_config(conf_file)
+    if incremental:
+        p.load_model(orig_model_file)
+    model = p.build_pipeline(datasource, incremental=incremental)
+    json.dump(model, open(model_file, 'w'), indent=4)
+
+
+def process(params):
+    train(
+        input_file=params.input_file,
+        conf_file=params.conf_file,
+        model_file=params.model_file,
+        orig_model_file=params.orig_model_file,
+        incremental=params.incremental,
+        spark=params.spark,
+        spark_conf=params.spark_conf
+    )
 
 
 if __name__ == '__main__':
@@ -53,7 +74,8 @@ if __name__ == '__main__':
     parser.add_option('--incremental', action='store_true', help='perform incremental update on the model (will load '
                                                                  '--orig-model-file and save at location specified by '
                                                                  '--model-file)')
-
+    parser.add_option('--spark', action='store_true', help='use spark for processing')
+    parser.add_option('--spark-conf', action='store', dest='spark_conf', default=None, help='location of spark configuration file')
     (params, _) = parser.parse_args(sys.argv)
 
     if params.input_file and params.conf_file and params.model_file:
