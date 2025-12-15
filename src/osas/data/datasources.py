@@ -285,7 +285,6 @@ if _HAS_PYSPARK:
         def get_dataframe(self):
             return self._data
 
-        @property
         def set_dataframe(self, dataframe: SparkDataFrame):
             self._data = dataframe
             return self
