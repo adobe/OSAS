@@ -142,14 +142,17 @@ class Pipeline:
             ])
 
             def train_pipeline_on_partition(pdf_iter: Iterator[pd.DataFrame]):
+                import copy
                 pipeline = broadcasted_pipeline.value
                 gd = broadcasted_gd.value
                 count_column = broadcasted_count_column.value
-                for pdf in pdf_iter:
-                    rows = []
+            
+                for pdf in pdf_iter:    
+                    rows = []    
                     for idx, lg in enumerate(pipeline):
+                        lg_copy = copy.deepcopy(lg)
                         ds = CSVDataSource(data=pdf)
-                        model = gd.from_pretrained(lg.__class__.__name__, gd.build_model(lg, ds, count_column=count_column))
+                        model = gd.from_pretrained(lg_copy.__class__.__name__, gd.build_model(lg_copy, ds, count_column=count_column))
                         rows.append({"lg_index": idx, "model_data": pickle.dumps(model)})
                     yield pd.DataFrame(rows)
 
@@ -157,16 +160,17 @@ class Pipeline:
             models_df = dataset.get_dataframe.mapInPandas(train_pipeline_on_partition, schema=schema)
             grouped = models_df.groupBy("lg_index").agg(F.collect_list("model_data").alias("partition_models"))
             partition_models = grouped.collect()
-
-            final_models = {}
-
+            partition_models_dict = {row['lg_index']: row['partition_models'] for row in partition_models}
+ 
+            final_model = {"model": {}}
             pipeline = []
-            for (row, sect) in zip(partition_models, gen_sect):
-                lg_index = row["lg_index"]
-                pickled_models_for_lg = row["partition_models"]  # list of binary blobs
-                models_for_lg = [pickle.loads(model) for model in pickled_models_for_lg]
-                final_model['model'][sect], model = gd.merge_models(models_for_lg)
-                pipeline.append(model)
+ 
+            for lg_index, sect in enumerate(gen_sect):
+                pickled_models_for_lg = partition_models_dict[lg_index]
+                models_for_lg = [pickle.loads(m) for m in pickled_models_for_lg]
+                merged_model, pipeline_model = gd.merge_models(models_for_lg)
+                final_model['model'][sect] = merged_model
+                pipeline.append(pipeline_model)
             self._pipeline = pipeline
 
         self(dataset, dest_field_labels='_labels')
