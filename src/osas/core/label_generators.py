@@ -61,10 +61,8 @@ class ObfuscationField(LabelGenerator):
         platform_str = str(platform)
         self._model = {
             'field_name': field_name,
-            'platform': platform_str,
-            'gpu': gpu
         }
-        self._classifier = od.ObfuscationClassifier(platform=platform, gpu=gpu)
+        self._classifier = ObfuscationDetectionClassifier()
 
     def build_model(self, dataset: Datasource, count_column: str = None) -> dict:
         return self._model
@@ -73,17 +71,12 @@ class ObfuscationField(LabelGenerator):
     def from_pretrained(pretrained: str) -> object:
         lg = ObfuscationField()
         lg._model = json.loads(pretrained)
-        platform = od.PlatformType.ALL
-        if lg._model['platform'] == 'od.PlatformType.LINUX':
-            platform = od.PlatformType.LINUX
-        elif lg._model['platform'] == 'od.PlatformType.WINDOWS':
-            platform = od.PlatformType.WINDOWS
-        lg._classifier = od.ObfuscationClassifier(platform=platform, gpu=bool(lg._model['gpu']))
+        lg._classifier = ObfuscationDetectionClassifier()
         return lg
 
     def __call__(self, object: dict) -> [str]:
         command = object[self._model['field_name']]
-        classification = self._classifier([command])[0]
+        classification = int(self._classifier.predict([command])[0])
         if classification == 1:
             ret = 'OBFUSCATED'
         else:

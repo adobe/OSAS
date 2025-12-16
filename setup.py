@@ -12,7 +12,7 @@ def parse_requirements(filename):
 
 setuptools.setup(
     name="osas",
-    version="0.9.1",
+    version="0.9.3",
     author="Multiple Authors",
     author_email="boros@adobe.com",
     description="One Stop Anomaly Shop",
