@@ -69,23 +69,6 @@ class GroomData():
         # get args for the label generator
         cfg = getattr(sys.modules[config.__name__], name)()
         return lgClass.from_pretrained(json.dumps(pretrained))
-        # if load_config:
-        #     if isinstance(load_config, configparser.SectionProxy):
-        #         cfg = load_config
-        #     else:
-        #         cfg.load(load_config)
-        # # get label gen obj
-        # # di = {key: eval(cfg[key]) for key in cfg}
-        # di = {}
-        # for key in cfg:
-        #     try:
-        #         val = eval(cfg[key])
-        #     except:
-        #         val = cfg[key]
-        #     di[key] = val
-        # del di['generator_type']
-        # lg = lgClass(**di)  # convert obj to dict to kwargs
-        # return lg
 
     def build_model(self, model: LabelGenerator,
                     dataset: Datasource, count_column: str) -> dict:
